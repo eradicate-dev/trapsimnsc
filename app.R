@@ -1175,7 +1175,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 "))),
               fluidRow(
                 column(width=6,  
-                       h1("Pest Control DSS v2"),
+                       h1("Pest Control DSS"),
                        "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
                        # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
                        # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
