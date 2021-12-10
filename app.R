@@ -32,7 +32,7 @@ def.shp<-"WhakatipuMahia"
 ras.2<-raster("habitat_specific.asc")
 # ras.z2<-raster("huntingeffort.asc")
 
-
+cols.tst<-brewer.pal(6,"Blues")
 cols.vec<-brewer.pal(8,"Paired")
 cols.eff<-brewer.pal(8,"Reds")
 proj4string <- "+proj=tmerc +lat_0=0.0 +lon_0=173.0 +k=0.9996 +x_0=1600000.0 +y_0=10000000.0 +datum=WGS84 +units=m"
