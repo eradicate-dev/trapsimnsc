@@ -1190,9 +1190,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                 ),
                 column(6,
                        img(src="manaaki_logo.png", height = 90, align="right", hspace=20,vspace=10),
-                       img(src="ari_logo.jpg", height = 90, align="right", hspace=20,vspace=10),
-                       img(src="bhnsc.png", height = 90, align="right", hspace=20,vspace=10)
-                       # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10),
+                       # img(src="ari_logo.jpg", height = 90, align="right", hspace=20,vspace=10),
+                       img(src="bhnsc.png", height = 90, align="right", hspace=20,vspace=10),
+                       img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
                        # img(src="IC_logo.png", height = 90, align="right", hspace=20,vspace=10)
                 )
               ),
@@ -1282,9 +1282,6 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                    div(style="width:300px;display:inline-block;vertical-align:bottom",
                                                        verbatimTextOutput("text5")),
                                                    # p(),
-                                                   
-                                                   
-                                                   
                                                    leafletOutput(outputId = "mymap", height = "1000px", width="1400px")
                                                    
                                             )
@@ -1465,7 +1462,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                            numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Nightly probability of station failure  ",
-                                                           numericInput(inputId = "p.failure.a", label="Daily bycatch", value=0, width="120px"))),
+                                                           numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, width="120px"))),
                                               
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Labour cost - day rate ($)",
@@ -1625,10 +1622,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.7.1: 13 January 2021"),
-              h6("Developed by Manaaki Whenua - Landcare Research."),
-              h6("email: gormleya@landcareresearch.co.nz"),
-              h6("Developed using funding from Centre for Invasive Species Solutions (CISS), MBIE (New Zealand), and Island Conservation")
+              h6("v0.9: Novemeber 2021"),
+              h6("email: gormleya@landcareresearch.co.nz")#,
+              # h6("Developed using funding from Centre for Invasive Species Solutions (CISS), MBIE (New Zealand), and Island Conservation")
 )
 
 
