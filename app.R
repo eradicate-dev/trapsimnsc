@@ -32,7 +32,7 @@ def.shp<-"WhakatipuMahia"
 ras.2<-raster("habitat_specific.asc")
 # ras.z2<-raster("huntingeffort.asc")
 
-cols.tst<-brewer.pal(6,"Blues")
+# cols.tst<-brewer.pal(6,"Blues")
 cols.vec<-brewer.pal(8,"Paired")
 cols.eff<-brewer.pal(8,"Reds")
 proj4string <- "+proj=tmerc +lat_0=0.0 +lon_0=173.0 +k=0.9996 +x_0=1600000.0 +y_0=10000000.0 +datum=WGS84 +units=m"
@@ -216,7 +216,7 @@ server<-function(input, output, session) {
     bait.check.a = NA
     bait.x.space.a = NA
     bait.y.space.a = NA
-    bait.g0.mean.a = NA
+    bait.g.mean.a = NA
     if(input$bait_methods==1){
       bait.start.a = input$bait.start.a
       bait.nights.a = input$bait.nights.a
@@ -224,7 +224,7 @@ server<-function(input, output, session) {
       bait.check.a = input$bait.check.a
       bait.x.space.a = input$bait.x.space.a
       bait.y.space.a = input$bait.y.space.a
-      bait.g0.mean.a = input$bait.g0.mean.a
+      bait.g.mean.a = input$bait.g0.mean.a
     }
     
     # 
@@ -252,7 +252,7 @@ server<-function(input, output, session) {
       bait.check.a = bait.check.a,
       bait.x.space.a = bait.x.space.a,
       bait.y.space.a = bait.y.space.a,
-      bait.g0.mean.a = bait.g0.mean.a
+      bait.g.mean.a = bait.g.mean.a
       # hunt.start.a = hunt.start.a,
       # hunt.days.a = hunt.days.a,
       # hunt.eff.a = hunt.eff.a,
@@ -381,6 +381,7 @@ server<-function(input, output, session) {
     pop.zone.list<-vector("list",n.scen)
     trap.catch.list<-vector("list",n.scen)
     hunt.catch.list<-vector("list",n.scen)
+    bait.catch.list<-vector("list",n.scen)
     # pop.size.zone.mat[[ii]][,t+1]
     
     withProgress(message="Running simulation ",value=0,{
@@ -537,6 +538,7 @@ server<-function(input, output, session) {
         n_its<-input$n.its
         pop.size.mat<-matrix(NA,nrow=n_its,ncol=n.nights+1)
         trap.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of trapping - for each iteration - how many that night/day
+        bait.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of trapping - for each iteration - how many that night/day
         hunt.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of hunting
         pop.size.zone.vec<-vector("list",n_its)
         
@@ -652,7 +654,10 @@ server<-function(input, output, session) {
             trap.remain.b<-rep(max.catch.b, n.traps.b)
           }
           # trap.remain<-rep(T,n.traps)						        #Record if the trap remains in operation...TRUE, FALSE
-          
+          if(is.na(bait.start.a)==FALSE){
+            bait.catch.a<-matrix(0,n.baits.a,n.nights)  			#Trap.catch stores the captures in each trap each night
+            # bait.remain.a<-rep(max.catch.b, n.traps.b)
+          }
           
           
           
@@ -745,9 +750,40 @@ server<-function(input, output, session) {
               } #End of if t %in% trap.period
             }
             
+            #Now do some baiting....
             
-            
-            
+            if(is.na(bait.start.a)==FALSE){
+              if(t%in%bait.period.a==TRUE){
+                # if(t%in%check.interval.b==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
+                #   trap.remain.b<-rep(max.catch.b,n.traps.b)
+                # }
+                #Turn off some of the traps according to the random probability
+                # trap.remain[rbinom(n.traps,1, p.bycatch)==1]<-FALSE #Nedd to only turn off those that are on...Might be okay...
+                # trap.remain.b<-trap.remain.b-rbinom(n.traps.b, trap.remain.b, p.bycatch.b) #This modifcation deals with multiple capture traps 
+                # trap.remain.b[trap.remain.b<0]<-0
+                
+                if(sum(not.caught)>0){
+                  for (j in not.caught){ 							#For each animal not already caught
+                    
+                    #New code based on Multinomial (from Dean...
+                    prob.tmp<-prob.xy.c[,j]#*(trap.remain.b>0)				#Adjust the probabilities with trap.remain so previous traps cannot catch anything
+                    cumulative.capture.prob<-1-prod(1-prob.tmp) #Cumulative probability of possum i getting captured
+                    
+                    if(rbinom(1,1,prob=cumulative.capture.prob)==1){#If the animal is going to get caught...
+                      trap.id<-match(1,rmultinom(1,1,prob.tmp))#Which was the successful trap...
+                      bait.catch.a[trap.id,t]<-bait.catch.a[trap.id,t]+1
+                      # trap.animals[j]<-1					#Set trapped animal to 1
+                      animals.xy$Dead[j]<-1
+                      # animals.xy$Day2[j]<-t
+                      # trap.remain[trap.id]<-(trap.catch[trap.id,t]<max.catch)			#Calculate whether the trap is full or not!!
+                      # trap.remain.b[trap.id]<-trap.remain.b[trap.id]-1
+                    }
+                    # }
+                  }
+                  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Module for immigration to go in here...
+                }
+              } #End of if t %in% trap.period
+            }
             
             
             
@@ -850,10 +886,16 @@ server<-function(input, output, session) {
                     new.animals.xy$g0.b[sample(x=N.new,size=round(N.new*g.zero.b),replace=F)]<-0
                   }
                 }else{
-                  animals.xy$g0.b<-0
+                  new.animals.xy$g0.b<-0
                 }
                 
-                
+                if(is.na(bait.start.a)==FALSE){
+                  # alpbet.bait<-get.alpha.beta(bait.g0.mean.a, bait.g0.sd.a)
+                  new.animals.xy$g0.bait<-rbeta(N.new, alpbet.bait$alpha, alpbet.bait$beta)
+                  new.animals.xy$g0.bait[new.animals.xy$g0.bait<0]<-0 #Probably not needed
+                }else{
+                  new.animals.xy$g0.bait<-0
+                }
                 
                 
                 new.animals.xy$Sigma<-rlnorm(N.new ,meanlog=locshp$location, sdlog=locshp$shape)        
@@ -886,7 +928,14 @@ server<-function(input, output, session) {
                     prob.xy.b<-cbind(prob.xy.b, prob.xy.new.b)
                   }
                   
-                  
+                  if(is.na(bait.start.a)==FALSE){
+                    dist2.xy.new.c<-matrix(NA,n.baits.a,N.new)
+                    prob.xy.new.c<-matrix(0,n.baits.a,N.new)
+                    dist.xy.new.c<-dist(as.data.frame(baits.xy.a), as.data.frame(new.animals.xy)[,1:2], method="euclidean") #Distance (not squared) - faster than using outer
+                    prob.xy.new.c<-exp(-(dist.xy.new.c^2)/(2*new.animals.xy$Sigma^2))*new.animals.xy$g0.bait #Use the g0u for sampling...
+                    rm(dist.xy.new.c)
+                    prob.xy.c<-cbind(prob.xy.c, prob.xy.new.c)
+                  }
                   
                 }
                 
@@ -917,6 +966,11 @@ server<-function(input, output, session) {
             if(is.na(trap.start.b)==FALSE){
               trap.catch.mat[ii,]<-colSums(trap.catch.a)+colSums(trap.catch.b)
             }
+            if(is.na(bait.start.a)==FALSE){
+              bait.catch.mat[ii,]<-colSums(bait.catch.a)
+            }else{
+              bait.catch.mat[ii,]<-rep(0, n.nights)
+            }
           }
         }#End of iteration ii
         
@@ -933,6 +987,7 @@ server<-function(input, output, session) {
         pop.size.list[[kk]]<-pop.size.mat
         hunt.catch.list[[kk]]<-hunt.catch.mat
         trap.catch.list[[kk]]<-trap.catch.mat
+        bait.catch.list[[kk]]<-bait.catch.mat
         # cat(file=stderr(), "drawing histogram with", kk, "bins", "\n")
       } #End kk    
       
@@ -940,8 +995,9 @@ server<-function(input, output, session) {
       #Add a comment 
     })  #End of progress
     
-    return(list(trap.catch.mat=trap.catch.mat, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, hunt.catch.list=hunt.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
-  })
+    return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
+  }
+  )
   
   
   
@@ -990,12 +1046,14 @@ server<-function(input, output, session) {
   output$plot2<-renderPlot({
     trap.catch.list<-datab()$trap.catch.list
     trap.catch.mat<-trap.catch.list[[as.numeric(input$result_scenario)]]
+    bait.catch.list<-datab()$bait.catch.list
+    bait.catch.mat<-bait.catch.list[[as.numeric(input$result_scenario)]]
     
     nights.vec<-1:input$n.nights
     ymax<-max(cumsum(colMeans(trap.catch.mat)))
     
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
-    plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative captures", las=1)
+    plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative kills", las=1)
     for(i in 1:input$n.its){
       lines(nights.vec,cumsum(trap.catch.mat[i,]), col="grey")
     }
@@ -1006,24 +1064,24 @@ server<-function(input, output, session) {
   })
   
   
-  output$plot2.hunt<-renderPlot({
-    
-    hunt.catch.list<-datab()$hunt.catch.list
-    trap.catch.mat<-hunt.catch.list[[as.numeric(input$result_scenario)]]
-    
-    nights.vec<-1:input$n.nights
-    ymax<-max(cumsum(colMeans(trap.catch.mat)))
-    
-    par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
-    plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative captures", las=1)
-    for(i in 1:input$n.its){
-      lines(nights.vec,cumsum(trap.catch.mat[i,]), col="grey")
-    }
-    lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col="black")
-    points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg="black", pch=21)
-    mtext("Cumulative captures: Hunting",3, cex=1.5, line=1)
-    # mtext("Trapped per night",3, cex=1.5, line=1)
-  })
+  # output$plot2.hunt<-renderPlot({
+  #   
+  #   hunt.catch.list<-datab()$hunt.catch.list
+  #   trap.catch.mat<-hunt.catch.list[[as.numeric(input$result_scenario)]]
+  #   
+  #   nights.vec<-1:input$n.nights
+  #   ymax<-max(cumsum(colMeans(trap.catch.mat)))
+  #   
+  #   par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
+  #   plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative captures", las=1)
+  #   for(i in 1:input$n.its){
+  #     lines(nights.vec,cumsum(trap.catch.mat[i,]), col="grey")
+  #   }
+  #   lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col="black")
+  #   points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg="black", pch=21)
+  #   mtext("Cumulative captures: Hunting",3, cex=1.5, line=1)
+  #   # mtext("Trapped per night",3, cex=1.5, line=1)
+  # })
   
   
   output$plot4<-renderPlot({
@@ -1622,7 +1680,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v0.9: Novemeber 2021"),
+              h6("v0.9: November 2021"),
               h6("email: gormleya@landcareresearch.co.nz")#,
               # h6("Developed using funding from Centre for Invasive Species Solutions (CISS), MBIE (New Zealand), and Island Conservation")
 )
