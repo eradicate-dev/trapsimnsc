@@ -146,10 +146,8 @@ server<-function(input, output, session) {
     # validate(
     #   need(input$trap_methods==TRUE | input$hunt_methods==TRUE,"You need at least trapping or hunting")
     # )
-    
     x.space.a = NA
     y.space.a = NA
-    buffer.a = NA
     trap.start.a = NA
     trap.nights.a = NA
     check.interval.a = NA
@@ -157,7 +155,6 @@ server<-function(input, output, session) {
     g.zero.a=NA    #This is ther proportion that is untrappable, not g0....
     x.space.b = NA
     y.space.b = NA
-    buffer.b = NA
     trap.start.b = NA
     trap.nights.b = NA
     check.interval.b = NA
@@ -167,7 +164,6 @@ server<-function(input, output, session) {
     if(input$trap_methods==1){    
       x.space.a = input$traps.x.space.a
       y.space.a = input$traps.y.space.a
-      buffer.a = input$traps.buff.a
       trap.start.a = input$trap.start.a
       trap.nights.a = input$trap.nights.a
       check.interval.a = input$n.check.a
@@ -176,7 +172,6 @@ server<-function(input, output, session) {
       if(input$show_trap_b==1){
         x.space.b = input$traps.x.space.b
         y.space.b = input$traps.y.space.b
-        buffer.b = input$traps.buff.b
         trap.start.b = input$trap.start.b
         trap.nights.b = input$trap.nights.b
         check.interval.b = input$n.check.b
@@ -212,27 +207,24 @@ server<-function(input, output, session) {
     
     bait.start.a = NA
     bait.nights.a = NA
-    bait.buff.a = NA
     bait.check.a = NA
     bait.x.space.a = NA
     bait.y.space.a = NA
     bait.g.mean.a = NA
+    bait.g.zero.a = NA
     if(input$bait_methods==1){
       bait.start.a = input$bait.start.a
       bait.nights.a = input$bait.nights.a
-      bait.buff.a = input$bait.buff.a
       bait.check.a = input$bait.check.a
       bait.x.space.a = input$bait.x.space.a
       bait.y.space.a = input$bait.y.space.a
       bait.g.mean.a = input$bait.g0.mean.a
+      bait.g.zero.a = input$bait.g.zero.a
     }
-    
-    # 
     
     to_add <- data.frame(
       x.space.a = x.space.a,
       y.space.a = y.space.a,
-      buffer.a = buffer.a,
       trap.start.a = trap.start.a,
       trap.nights.a = trap.nights.a,
       check.interval.a = check.interval.a,
@@ -240,7 +232,6 @@ server<-function(input, output, session) {
       g.zero.a=g.zero.a,
       x.space.b = x.space.b,
       y.space.b = y.space.b,
-      buffer.b = buffer.b,
       trap.start.b = trap.start.b,
       trap.nights.b = trap.nights.b,
       check.interval.b = check.interval.b,
@@ -248,11 +239,11 @@ server<-function(input, output, session) {
       g.zero.b=g.zero.b,
       bait.start.a = bait.start.a,
       bait.nights.a = bait.nights.a,
-      bait.buff.a = bait.buff.a,
       bait.check.a = bait.check.a,
       bait.x.space.a = bait.x.space.a,
       bait.y.space.a = bait.y.space.a,
-      bait.g.mean.a = bait.g.mean.a
+      bait.g.mean.a = bait.g.mean.a,
+      bait.g.zero.a = bait.g.zero.a
       # hunt.start.a = hunt.start.a,
       # hunt.days.a = hunt.days.a,
       # hunt.eff.a = hunt.eff.a,
@@ -266,7 +257,8 @@ server<-function(input, output, session) {
     
     #Test for duplicated
     t<-scenParam()
-    t<-t[!duplicated(t), ]
+    t<-t[!duplicated(t), ]        #Dont add duplicates
+    t<-t[!rowSums(is.na(t))==21,]  #Dont add blank scenrios
     scenParam(t)
     
     # scenParam<-rbind(scenParam,to_add)
@@ -299,27 +291,26 @@ server<-function(input, output, session) {
   })
   
   
-  #Two hunting methods. Calculate the probability of kill based on k/rho and effort.
-  mydata.hunt.prob<-reactive({
-    effort.zone<-c(input$effort.a, input$effort.b)
-    hunt.rho<-c(input$hunt.rho.a, input$hunt.rho.b)
-    hunt.k<-c(input$hunt.k.a, input$hunt.k.b)
-    theta.hat<-1-exp(-((hunt.rho*log(effort.zone))^hunt.k))
-    p.hunt.day<-theta.hat
-    
-    return(list(p.hunt.day=p.hunt.day))
-    
-  })
+  # #Two hunting methods. Calculate the probability of kill based on k/rho and effort.
+  # #! Currently not used.
+  # mydata.hunt.prob<-reactive({
+  #   effort.zone<-c(input$effort.a, input$effort.b)
+  #   hunt.rho<-c(input$hunt.rho.a, input$hunt.rho.b)
+  #   hunt.k<-c(input$hunt.k.a, input$hunt.k.b)
+  #   theta.hat<-1-exp(-((hunt.rho*log(effort.zone))^hunt.k))
+  #   p.hunt.day<-theta.hat
+  #   
+  #   return(list(p.hunt.day=p.hunt.day))
+  #   
+  # })
   
   
   
   # Make the traps and animals on the interactive map. Not linked to the actual simulation
   mydata.map<-reactive({
     shp<-mydata.shp()$shp    
-    
     traps.x.space<-as.numeric(input$traps.x.space.i)
     traps.y.space<-as.numeric(input$traps.y.space.i)
-    # traps.y.space<-input$traps.y.space
     buff<-as.numeric(input$traps.buff.i)
     traps<-make.trap.locs(traps.x.space, traps.y.space, buff, shp)
     
@@ -349,15 +340,16 @@ server<-function(input, output, session) {
   #~~~~~~~~~~  Now simulate the actual trapping...~~~~~~~~~~~~~~~~~~
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
+  #    When the simulations get run, automatically switch to the results tab. Noice!
   observeEvent(input$act.btn.trapsim,{
     updateTabsetPanel(session, "inTabset",selected = "4. Results")
   })
   
   datab<-eventReactive(input$act.btn.trapsim,{
-    
-    #Some validation stuff
+    buffer<-100  #A single buffer
+    #Some validation stuff - need to fill this out more completely.
     validate(
-      need(input$traps.buff.a != "", "Please enter a value for the trap buffer"),
+      # need(input$traps.buff.a != "", "Please enter a value for the trap buffer"),
       need(input$traps.x.space.a != "", "Please enter a value for the X trap spacing"),
       need(input$traps.y.space.a != "", "Please enter a value for the Y trap spacing"),
       need(input$n.nights != "", "Please enter a value for the number of Nights"),
@@ -366,16 +358,11 @@ server<-function(input, output, session) {
       need(input$max.catch.a != "", "Please enter a value for the prob of Max catch")
     )
     
-    
-    
-    
+
     #Get the parameter values for the scenarios
-    # params<-mydata.scen()$params
-    
-    
+
     params<-as.data.frame(scenParam())
-    # params<-as.data.frame(scenParam)
-    
+    #Set up some places to store results 
     n.scen<-dim(params)[1]    
     pop.size.list<-vector("list",n.scen)
     pop.zone.list<-vector("list",n.scen)
@@ -386,7 +373,7 @@ server<-function(input, output, session) {
     
     withProgress(message="Running simulation ",value=0,{
       
-      for(kk in 1:n.scen){
+      for(kk in 1:n.scen){  #For each scenario...
         incProgress(kk/n.scen, detail = paste("Doing scenario ", kk," of", n.scen))
         
         #Pass the parameters from params to a parameter name.
@@ -396,7 +383,7 @@ server<-function(input, output, session) {
         n.check.a<-params$check.interval.a[kk]
         x.space.a<-params$x.space.a[kk]
         y.space.a<-params$y.space.a[kk]
-        buffer.a<-params$buffer.a[kk]
+        buffer.a<-buffer
         g0.mean.a<-params$g.mean.a[kk]
         g.zero.a<-params$g.zero.a[kk]
         
@@ -405,7 +392,7 @@ server<-function(input, output, session) {
         n.check.b<-params$check.interval.b[kk]
         x.space.b<-params$x.space.b[kk]
         y.space.b<-params$y.space.b[kk]
-        buffer.b<-params$buffer.b[kk]
+        buffer.b<-buffer
         g0.mean.b<-params$g.mean.b[kk]
         g.zero.b<-params$g.zero.b[kk]
         
@@ -415,9 +402,12 @@ server<-function(input, output, session) {
         bait.check.a<-params$bait.check.a[kk]
         bait.x.space.a<-params$bait.x.space.a[kk]
         bait.y.space.a<-params$bait.y.space.a[kk]
-        bait.buff.a<-params$bait.buff.a[kk]
+        bait.buff.a<-buffer
         bait.g0.mean.a<-params$bait.g.mean.a[kk]
+        bait.g.zero.a<- params$bait.g.zero.a[kk]
         
+        
+        # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
         if(is.na(trap.start.a)==FALSE){
           trap.period.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a-1), by=1)
           # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
@@ -442,12 +432,9 @@ server<-function(input, output, session) {
         #How long to run the simulation for.
         n.nights<-input$n.nights
 
-        # g0.mean.a<-input$g0.mean.a
+        #The g0 uncertainty, and sigma values for traps and bait - not in params - but should be, 
         g0.sd.a<-input$g0.sd.a
-        # g0.mean.b<-input$g0.mean.b
         g0.sd.b<-input$g0.sd.b
-        
-        
         bait.g0.sd.a<-input$bait.g0.sd.a
         
         sigma.mean<-input$sigma.mean 
@@ -466,11 +453,9 @@ server<-function(input, output, session) {
         ha<-mydata.shp()$ha
         shp<-mydata.shp()$shp
         # shp.2<-mydata.zone()$shp.2
-        
-        
-        
+
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-        #Make the trap locations 
+        #Make the trap & bait station locations 
         if(is.na(trap.start.a)==FALSE){
           traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp)
           coordinates(traps.a) <- c( "X", "Y" )
@@ -507,7 +492,7 @@ server<-function(input, output, session) {
         max.catch.a<-input$max.catch.a
         max.catch.b<-input$max.catch.b
         
-        #Calculate the costs.
+        #~~~~Calculate the costs~~~~
         trap.cost.sim<-0
         bait.cost.sim<-0
         if(is.na(trap.start.a)==FALSE){
@@ -535,10 +520,10 @@ server<-function(input, output, session) {
           
         }
         
-        n_its<-input$n.its
+        n_its<-input$n.its  #Number of iterations
         pop.size.mat<-matrix(NA,nrow=n_its,ncol=n.nights+1)
         trap.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of trapping - for each iteration - how many that night/day
-        bait.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of trapping - for each iteration - how many that night/day
+        bait.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of baiting - for each iteration - how many that night/day
         hunt.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of hunting
         pop.size.zone.vec<-vector("list",n_its)
         
@@ -569,19 +554,22 @@ server<-function(input, output, session) {
           proj4string(animals.xy) <- proj4string(shp)
           
           #g0 for traps
+          if(is.na(trap.start.a)==FALSE){
           alpbet.a<-get.alpha.beta(g0.mean.a, g0.sd.a)
           animals.xy$g0.a<-rbeta(n.animals, alpbet.a$alpha, alpbet.a$beta)
           animals.xy$g0.a[animals.xy$g0.a<0]<-0 #Probably not needed
-          animals.xy$g0.a[sample(x=n.animals,size=round(n.animals*g.zero.a),replace=F)]<-0
-          
+          animals.xy$g0.a[sample(x=n.animals,size=round(n.animals*g.zero.a),replace=F)]<-0  #Make some of the g0 values zero - untrappable animals...
+          }else{
+            animals.xy$g0.b<-0
+          }
           #g0 for trap type 2
           if(is.na(trap.start.b)==FALSE){
             alpbet.b<-get.alpha.beta(g0.mean.b, g0.sd.b)
             animals.xy$g0.b<-rbeta(n.animals, alpbet.b$alpha, alpbet.b$beta)
             animals.xy$g0.b[animals.xy$g0.b<0]<-0 #Probably not needed
-            if(is.na(g.zero.b)==FALSE){
+            # if(is.na(g.zero.b)==FALSE){
               animals.xy$g0.b[sample(x=n.animals,size=round(n.animals*g.zero.b),replace=F)]<-0
-            }
+            # }
           }else{
             animals.xy$g0.b<-0
           }
@@ -591,6 +579,8 @@ server<-function(input, output, session) {
             alpbet.bait<-get.alpha.beta(bait.g0.mean.a, bait.g0.sd.a)
             animals.xy$g0.bait<-rbeta(n.animals, alpbet.bait$alpha, alpbet.bait$beta)
             animals.xy$g0.bait[animals.xy$g0.bait<0]<-0 #Probably not needed
+            animals.xy$g0.bait[sample(x=n.animals,size=round(n.animals*bait.g.zero.a),replace=F)]<-0
+            
             # if(is.na(g.zero.b)==FALSE){
             #   animals.xy$g0.b[sample(x=n.animals,size=round(n.animals*g.zero.b),replace=F)]<-0
             # }
@@ -754,14 +744,7 @@ server<-function(input, output, session) {
             
             if(is.na(bait.start.a)==FALSE){
               if(t%in%bait.period.a==TRUE){
-                # if(t%in%check.interval.b==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
-                #   trap.remain.b<-rep(max.catch.b,n.traps.b)
-                # }
-                #Turn off some of the traps according to the random probability
-                # trap.remain[rbinom(n.traps,1, p.bycatch)==1]<-FALSE #Nedd to only turn off those that are on...Might be okay...
-                # trap.remain.b<-trap.remain.b-rbinom(n.traps.b, trap.remain.b, p.bycatch.b) #This modifcation deals with multiple capture traps 
-                # trap.remain.b[trap.remain.b<0]<-0
-                
+
                 if(sum(not.caught)>0){
                   for (j in not.caught){ 							#For each animal not already caught
                     
@@ -772,15 +755,9 @@ server<-function(input, output, session) {
                     if(rbinom(1,1,prob=cumulative.capture.prob)==1){#If the animal is going to get caught...
                       trap.id<-match(1,rmultinom(1,1,prob.tmp))#Which was the successful trap...
                       bait.catch.a[trap.id,t]<-bait.catch.a[trap.id,t]+1
-                      # trap.animals[j]<-1					#Set trapped animal to 1
                       animals.xy$Dead[j]<-1
-                      # animals.xy$Day2[j]<-t
-                      # trap.remain[trap.id]<-(trap.catch[trap.id,t]<max.catch)			#Calculate whether the trap is full or not!!
-                      # trap.remain.b[trap.id]<-trap.remain.b[trap.id]-1
                     }
-                    # }
                   }
-                  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~Module for immigration to go in here...
                 }
               } #End of if t %in% trap.period
             }
@@ -1050,16 +1027,23 @@ server<-function(input, output, session) {
     bait.catch.mat<-bait.catch.list[[as.numeric(input$result_scenario)]]
     
     nights.vec<-1:input$n.nights
-    ymax<-max(cumsum(colMeans(trap.catch.mat)))
+    ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
+    ymax.b<-max(cumsum(colMeans(bait.catch.mat)))
+    ymax<-max(ymax.b, ymax.t)
     
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
     plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative kills", las=1)
     for(i in 1:input$n.its){
-      lines(nights.vec,cumsum(trap.catch.mat[i,]), col="grey")
+      lines(nights.vec,cumsum(trap.catch.mat[i,]), col=cols.vec[1])
+      lines(nights.vec,cumsum(bait.catch.mat[i,]), col=cols.vec[3])
     }
-    lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col="black")
-    points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg="black", pch=21)
-    mtext("Cumulative captures: Trapping",3, cex=1.5, line=1)
+    lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col=cols.vec[2])
+    points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg=cols.vec[2], pch=21)
+    
+    lines(nights.vec,cumsum(colMeans(bait.catch.mat)), col=cols.vec[4])
+    points(nights.vec,cumsum(colMeans(bait.catch.mat)), bg=cols.vec[4], pch=22)
+    
+    # mtext("Cumulative captures: Trapping",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
   })
   
@@ -1384,9 +1368,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="The trap spacing in the north-south direction",
                                                              numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="1000",width="135px"))),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(title="The buffer from the edge",
-                                                             numericInput(inputId = "traps.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
+                                                # div(style="display:inline-block;vertical-align:bottom",
+                                                #     tags$div(title="The buffer from the edge",
+                                                #              numericInput(inputId = "traps.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Nightly probability of by-catch, false triggers etc  ",
                                                              numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0, width="120px"))),
@@ -1454,9 +1438,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                   div(style="display:inline-block;vertical-align:bottom",
                                                       tags$div(id="redtitle",title="The trap spacing in the north-south direction",
                                                                numericInput(inputId = "traps.y.space.b", label="Spacing N-S (m)", value="200",width="135px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="The buffer from the edge",
-                                                               numericInput(inputId = "traps.buff.b", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
+                                                  # div(style="display:inline-block;vertical-align:bottom",
+                                                  #     tags$div(title="The buffer from the edge",
+                                                  #              numericInput(inputId = "traps.buff.b", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
                                                   
                                                   
                                                   # p(),
@@ -1505,19 +1489,19 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                            numericInput(inputId = "bait.start.a", label="Start night", value="5", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="Number of nights baits are set for.",
-                                                           numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="20", width="120px"))),
+                                                           numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
                                                            numericInput(inputId = "bait.check.a", label="Check interval", value="10", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="The bait station spacing in the east-west direction",
-                                                           numericInput(inputId = "bait.x.space.a", label="Spacing E-W (m)", value="2000",width="135px"))),
+                                                           numericInput(inputId = "bait.x.space.a", label="Spacing E-W (m)", value="500",width="135px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="The bait station spacing in the north-south direction",
-                                                           numericInput(inputId = "bait.y.space.a", label="Spacing N-S (m)", value="2000",width="135px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="The buffer from the edge",
-                                                           numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
+                                                           numericInput(inputId = "bait.y.space.a", label="Spacing N-S (m)", value="500",width="135px"))),
+                                              # div(style="display:inline-block;vertical-align:bottom",
+                                              #     tags$div(title="The buffer from the edge",
+                                              #              numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Nightly probability of station failure  ",
                                                            numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, width="120px"))),
@@ -1539,7 +1523,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   numericInput(inputId="bait.g0.sd.a", label='StdDev', value=.01, width="120px")),
                                               div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId = "bait.g0.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
+                                                  numericInput(inputId = "bait.g.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
 
                                               tags$style(type="text/css", "#redtitle {color: black}")
                                               # ),
