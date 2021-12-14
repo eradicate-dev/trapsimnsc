@@ -411,20 +411,20 @@ server<-function(input, output, session) {
         if(is.na(trap.start.a)==FALSE){
           trap.period.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a-1), by=1)
           # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
-          check.interval.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a)
+          check.vec.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a)
           p.bycatch.a<-input$p.bycatch.a
         }
         # if(input$show_trap_b==1){
         if(is.na(trap.start.b)==FALSE){
           trap.period.b<-seq(from=trap.start.b, to=(trap.start.b+trap.nights.b-1), by=1)
-          check.interval.b<-seq(from=trap.start.b, to=(trap.start.b+trap.nights.b), by=n.check.b)
+          check.vec.b<-seq(from=trap.start.b, to=(trap.start.b+trap.nights.b), by=n.check.b)
           p.bycatch.b<-input$p.bycatch.b
         }
         
         if(is.na(bait.start.a)==FALSE){
           bait.period.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a-1), by=1)
           # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
-          bait.check.interval.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a), by=bait.check.a)
+          bait.check.vec.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a), by=bait.check.a)
           p.failure.a<-0#input$p.bycatch.a
         }
         
@@ -496,15 +496,15 @@ server<-function(input, output, session) {
         trap.cost.sim<-0
         bait.cost.sim<-0
         if(is.na(trap.start.a)==FALSE){
-          trap.cost.sim<-trap.cost.func(a=check.interval.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
+          trap.cost.sim<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
         }
         # if(input$show_trap_b==1){
         if(is.na(trap.start.b)==FALSE){
-          trap.cost.sim<-trap.cost.sim+trap.cost.func(a=check.interval.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
+          trap.cost.sim<-trap.cost.sim+trap.cost.func(a=check.vec.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
         }
         
         if(is.na(bait.start.a)==FALSE){
-          bait.cost.sim<-trap.cost.func(a=bait.check.interval.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+          bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
         }
         
         
@@ -660,7 +660,7 @@ server<-function(input, output, session) {
             
             if(is.na(trap.start.a)==FALSE){
               if(t%in%trap.period.a==TRUE){
-                if(t%in%check.interval.a==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
+                if(t%in%check.vec.a==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
                   # trap.remain<-rep(T,n.traps)		
                   trap.remain.a<-rep(max.catch.a,n.traps.a)
                   if (input$sim_type=='grid'){
@@ -708,7 +708,7 @@ server<-function(input, output, session) {
             # if(input$show_trap_b==1){
             if(is.na(trap.start.b)==FALSE){
               if(t%in%trap.period.b==TRUE){
-                if(t%in%check.interval.b==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
+                if(t%in%check.vec.b==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
                   # trap.remain<-rep(T,n.traps)		
                   trap.remain.b<-rep(max.catch.b,n.traps.b)
                 }
@@ -972,6 +972,10 @@ server<-function(input, output, session) {
       #Add a comment 
     })  #End of progress
     
+    
+    
+    params<-params[,c(25,24,22,23,1:21)]
+    
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
   )
@@ -1043,6 +1047,7 @@ server<-function(input, output, session) {
     lines(nights.vec,cumsum(colMeans(bait.catch.mat)), col=cols.vec[4])
     points(nights.vec,cumsum(colMeans(bait.catch.mat)), bg=cols.vec[4], pch=22)
     
+    legend("topleft", legend=c("Traps","Bait station"), pch=c(21,22), pt.bg=cols.vec[c(2,4)], bty="n")
     # mtext("Cumulative captures: Trapping",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
   })
@@ -1154,11 +1159,47 @@ server<-function(input, output, session) {
   
   
   output$text10<-renderText({
-    
     ha<-mydata.shp()$ha
-    
     return(paste0("Total area (ha): ", round(ha,0)))
   })
+
+  
+  
+  output$text_trap_a_cost<-renderText({
+    shp<-mydata.shp()$shp    
+    traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)
+    n.traps.a<-dim(traps.a)[1]
+    check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
+    cost<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
+    
+    return(paste0(n.traps.a," Traps\nCost = $", cost ))
+  })
+
+  output$text_trap_b_cost<-renderText({
+    shp<-mydata.shp()$shp    
+    traps.b<-make.trap.locs(input$traps.x.space.b, input$traps.y.space.b, 100, shp)
+    n.traps.b<-dim(traps.b)[1]
+    check.vec.b<-seq(from=input$trap.start.b, to=(input$trap.start.b+input$trap.nights.b), by=input$n.check.b)
+    cost<-trap.cost.func(a=check.vec.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
+    
+    return(paste0(n.traps.b," Traps\nCost = $", cost ))
+  })
+    
+  
+  
+  output$text_bait_a_cost<-renderText({
+    shp<-mydata.shp()$shp    
+    bait.a<-make.trap.locs(input$bait.x.space.a, input$bait.y.space.a, 100, shp)
+    n.bait.a<-dim(bait.a)[1]
+    bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
+    cost<-trap.cost.func(a=bait.check.vec.a, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+    
+    return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
+  })
+  
+
+  
+  
   
   # output$text11<-renderText({
   #   ha<-mydata()$ha
@@ -1216,28 +1257,50 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 }
                                 "))),
               fluidRow(
-                column(width=6,  
+                column(width=4,  
                        h1("Pest Control DSS"),
-                       "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
-                       # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
-                       # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
-                       "It is based on an earlier tool called TrapSim which was focused on simulating trapping only.",
-                       "For background on TrapSim, ", 
-                       tags$a(href="https://www.landcareresearch.co.nz/publications/newsletters/kararehe-kino/issue-32/trapsim-an-online-tool-to-help-managers-decide-on-a-trapping-regime", "Click here.", target="_blank"), p(),
-                       # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
-                       p(),
-                       strong("Hover cursor over each of the input boxes for pop-up help.")
+                       checkboxInput("showinfo","Background information and instructions"),
+
                        
                        # h3("Trapping Simulation Tool")
                 ),
-                column(6,
+                column(8,
                        img(src="manaaki_logo.png", height = 90, align="right", hspace=20,vspace=10),
                        # img(src="ari_logo.jpg", height = 90, align="right", hspace=20,vspace=10),
-                       img(src="bhnsc.png", height = 90, align="right", hspace=20,vspace=10),
-                       img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
+                       img(src="bhnsc.png", height = 90, align="right", hspace=20,vspace=10)
+
                        # img(src="IC_logo.png", height = 90, align="right", hspace=20,vspace=10)
                 )
               ),
+              
+              
+              fluidRow(
+                column(width=5, 
+                       conditionalPanel(
+                         condition = "input.showinfo == 1",
+                         "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
+                         # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
+                         # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
+                         p(),"It is based on an earlier tool called TrapSim which was focused on simulating trapping only.",
+                         "For a background report on TrapSim, ", 
+                         tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"), p(),
+                         
+                         h3("Instructions"),                        
+                         "1. Set the area and pest parameters" ,br(),
+                         "2. Control Methods - set the various scenarios by selecting the control methods and the corresponding parameters. Click 'Add Scenario' to build up a list of scenarios", br(),
+                         "3. Run Sceanrios - check the scenarios, enter the number of iterations for each and the simulation length. Click 'Run TrapSim'", br(),
+                         "4. Results - explore the results  - graphs and tables of animals remaining, costs etc", br(),
+                         
+                         
+                         # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
+                         p(),
+                         strong("Hover cursor over each of the input boxes for pop-up help.")
+
+                       )
+                )
+              ),
+              
+              
               
               fixedRow(
                 column(width=12,
@@ -1324,7 +1387,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                    div(style="width:300px;display:inline-block;vertical-align:bottom",
                                                        verbatimTextOutput("text5")),
                                                    # p(),
-                                                   leafletOutput(outputId = "mymap", height = "1000px", width="1400px")
+                                                   leafletOutput(outputId = "mymap", height = "1000px", width="1200px")
                                                    
                                             )
                                    ),
@@ -1354,6 +1417,27 @@ ui<-fluidPage(theme=shinytheme("flatly"),
 
                                                 div(style="display:inline-block;vertical-align:middle",h5("Trapping Method 1")),p(),
                                                 div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="The trap spacing in the east-west direction",
+                                                             numericInput(inputId = "traps.x.space.a", label="Spacing E-W (m)", value="1000",width="135px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="The trap spacing in the north-south direction",
+                                                             numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="1000",width="135px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Nightly probability of by-catch, false triggers etc  ",
+                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0, width="120px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Maximum catch per trap  ",
+                                                             numericInput(inputId = "max.catch.a", label="Max catch", value=1, width="135px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId = "g0.mean.a", label="Trap Probability (g0) Mean", value=0.1, width="120px")),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId="g0.sd.a", label='StdDev', value=.01, width="120px")),
+                                                # div(style="display:inline-block;vertical-align:bottom",
+                                                #     verbatimTextOutput("text8")),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId = "g0.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
+                                                #Timings
+                                                div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="Start night of trapping.",
                                                              numericInput(inputId = "trap.start.a", label="Start night", value="5", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
@@ -1363,43 +1447,26 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                     tags$div(id="redtitle",title="The checking interval of the traps. For traps that are not cleared, set equal to Nights ",
                                                              numericInput(inputId = "n.check.a", label="Check interval", value="1", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(id="redtitle",title="The trap spacing in the east-west direction",
-                                                             numericInput(inputId = "traps.x.space.a", label="Spacing E-W (m)", value="1000",width="135px"))),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(id="redtitle",title="The trap spacing in the north-south direction",
-                                                             numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="1000",width="135px"))),
-                                                # div(style="display:inline-block;vertical-align:bottom",
-                                                #     tags$div(title="The buffer from the edge",
-                                                #              numericInput(inputId = "traps.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(title="Nightly probability of by-catch, false triggers etc  ",
-                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0, width="120px"))),
+                                                    tags$div(title="Number of traps checked per day",
+                                                             numericInput(inputId = "traps.per.day.a", label="Traps checked per day", value=40, width="120px")
+                                                    )),
                                                 
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(title="Maximum catch per trap  ",
-                                                             numericInput(inputId = "max.catch.a", label="Max catch", value=1, width="135px"))),
                                                 
+                                                #Costs
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Labour cost - day rate ($)",
                                                              numericInput(inputId = "day.rate.a", label="Day rate ($)", value=400, width="135px")
                                                     )),
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    tags$div(title="Number of traps checked per day",
-                                                             numericInput(inputId = "traps.per.day.a", label="Traps checked per day", value=40, width="120px")
-                                                    )),
-                                                div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Fixed cost ($) per trap",
                                                              numericInput(inputId = "cost.per.trap.a", label="Fixed cost per trap ($)", value=20, width="120px")
                                                     )),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    numericInput(inputId = "g0.mean.a", label="Trap Probability (g0) Mean", value=0.1, width="120px")),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    numericInput(inputId="g0.sd.a", label='StdDev', value=.01, width="120px")),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    numericInput(inputId = "g0.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
                                                 
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    verbatimTextOutput("text8")),
+                                                    verbatimTextOutput("text_trap_a_cost")),
+                                                
+                                                
+                                                
                                                 # div(style="display:inline-block;vertical-align:bottom",
                                                 #     checkboxInput(inputId = "show_g0",label="Show g0 dist.", value=FALSE)),
                                                 # conditionalPanel(
@@ -1421,6 +1488,27 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                   # wellPanel(
                                                   div(style="display:inline-block;vertical-align:bottom",h5("Trapping Method 2")),p(),
                                                   div(style="display:inline-block;vertical-align:bottom",
+                                                      tags$div(id="redtitle",title="The trap spacing in the east-west direction",
+                                                               
+                                                               numericInput(inputId = "traps.x.space.b", label="Spacing E-W (m)", value="200",width="135px"))),
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      tags$div(id="redtitle",title="The trap spacing in the north-south direction",
+                                                               numericInput(inputId = "traps.y.space.b", label="Spacing N-S (m)", value="200",width="135px"))),
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      tags$div(title="Nightly probability of by-catch, false triggers etc  ",
+                                                               numericInput(inputId = "p.bycatch.b", label="Daily bycatch", value=0, width="120px"))),
+                                                  
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      tags$div(title="Maximum catch per trap  ",
+                                                               numericInput(inputId = "max.catch.b", label="Max catch", value=1, width="135px"))),
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      numericInput(inputId = "g0.mean.b", label="Trap Probability (g0) Mean", value=0.2, width="120px")),
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      numericInput(inputId="g0.sd.b", label='StdDev', value=.01, width="120px")),
+                                                  div(style="display:inline-block;vertical-align:bottom",
+                                                      numericInput(inputId = "g0.zero.b", label="Proportion untrappable", value=0.05, width="120px")),
+
+                                                  div(style="display:inline-block;vertical-align:bottom",
                                                       tags$div(id="redtitle",title="Start night of trapping.",
                                                                numericInput(inputId = "trap.start.b", label="Start night", value="50", width="120px"))),
                                                   
@@ -1431,47 +1519,24 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                   div(style="display:inline-block;vertical-align:bottom",
                                                       tags$div(id="redtitle",title="The checking interval of the traps. For traps that are not cleared, set equal to Nights ",
                                                                numericInput(inputId = "n.check.b", label="Check interval", value="10", width="120px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="The trap spacing in the east-west direction",
-                                                               
-                                                               numericInput(inputId = "traps.x.space.b", label="Spacing E-W (m)", value="200",width="135px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="The trap spacing in the north-south direction",
-                                                               numericInput(inputId = "traps.y.space.b", label="Spacing N-S (m)", value="200",width="135px"))),
-                                                  # div(style="display:inline-block;vertical-align:bottom",
-                                                  #     tags$div(title="The buffer from the edge",
-                                                  #              numericInput(inputId = "traps.buff.b", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
-                                                  
-                                                  
-                                                  # p(),
-                                                  # tags$div(title="g0 is the probability of trapping an animal on a single night if the trap is at the middle of its home range.",
-                                                  #          h5(strong("Trap probability (g0)"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Nightly probability of by-catch, false triggers etc  ",
-                                                               numericInput(inputId = "p.bycatch.b", label="Daily bycatch", value=0, width="120px"))),
                                                   
                                                   div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Maximum catch per trap  ",
-                                                               numericInput(inputId = "max.catch.b", label="Max catch", value=1, width="135px"))),
+                                                      tags$div(title="Number of traps checked per day",
+                                                               numericInput(inputId = "traps.per.day.b", label="Traps checked per day", value=40, width="120px")
+                                                      )),
                                                   
                                                   div(style="display:inline-block;vertical-align:bottom",
                                                       tags$div(title="Labour cost - day rate ($)",
                                                                numericInput(inputId = "day.rate.b", label="Day rate ($)", value=400, width="135px")
                                                       )),
                                                   div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Number of traps checked per day",
-                                                               numericInput(inputId = "traps.per.day.b", label="Traps checked per day", value=40, width="120px")
-                                                      )),
-                                                  div(style="display:inline-block;vertical-align:bottom",
                                                       tags$div(title="Fixed cost ($) per trap",
                                                                numericInput(inputId = "cost.per.trap.b", label="Fixed cost per trap ($)", value=20, width="120px")
                                                       )),
                                                   div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId = "g0.mean.b", label="Trap Probability (g0) Mean", value=0.2, width="120px")),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId="g0.sd.b", label='StdDev', value=.01, width="120px")),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId = "g0.zero.b", label="Proportion untrappable", value=0.05, width="120px"))
+                                                      verbatimTextOutput("text_trap_b_cost"))
+                                                  
+                                                  
                                                 ) #End of Well Panel
                                               )
                                             ),
@@ -1484,15 +1549,6 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             wellPanel(
                                               
                                               # div(style="display:inline-block;vertical-align:middle",h5("Baiting Method 1")),p(),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="Start night of baiting.",
-                                                           numericInput(inputId = "bait.start.a", label="Start night", value="5", width="120px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="Number of nights baits are set for.",
-                                                           numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
-                                                           numericInput(inputId = "bait.check.a", label="Check interval", value="10", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="The bait station spacing in the east-west direction",
                                                            numericInput(inputId = "bait.x.space.a", label="Spacing E-W (m)", value="500",width="135px"))),
@@ -1507,24 +1563,40 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                            numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, width="120px"))),
                                               
                                               div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Labour cost - day rate ($)",
-                                                           numericInput(inputId = "bait.day.rate.a", label="Day rate ($)", value=400, width="135px")
-                                                  )),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Number of stations checked per day",
-                                                           numericInput(inputId = "bait.per.day.a", label="Bait stations checked per day", value=40, width="120px")
-                                                  )),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Fixed cost ($) per bait station",
-                                                           numericInput(inputId = "cost.per.bait.a", label="Fixed cost per bait station ($)", value=60, width="120px")
-                                                  )),
-                                              div(style="display:inline-block;vertical-align:bottom",
                                                   numericInput(inputId = "bait.g0.mean.a", label="Bait Sation Probability (g0) Mean", value=0.1, width="120px")),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   numericInput(inputId="bait.g0.sd.a", label='StdDev', value=.01, width="120px")),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   numericInput(inputId = "bait.g.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
 
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(id="redtitle",title="Start night of baiting.",
+                                                           numericInput(inputId = "bait.start.a", label="Start night", value="5", width="120px"))),
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(id="redtitle",title="Number of nights baits are set for.",
+                                                           numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
+                                                           numericInput(inputId = "bait.check.a", label="Check interval", value="10", width="120px"))),
+                                              
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(title="Number of stations checked per day",
+                                                           numericInput(inputId = "bait.per.day.a", label="Bait stations checked per day", value=40, width="120px")
+                                                  )),
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(title="Labour cost - day rate ($)",
+                                                           numericInput(inputId = "bait.day.rate.a", label="Day rate ($)", value=400, width="135px")
+                                                  )),
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(title="Fixed cost ($) per bait station",
+                                                           numericInput(inputId = "cost.per.bait.a", label="Fixed cost per bait station ($)", value=60, width="120px")
+                                                  )),
+                                              
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  verbatimTextOutput("text_bait_a_cost")),
+                                              # text_bait_a_cost
+                                              
+                                              
                                               tags$style(type="text/css", "#redtitle {color: black}")
                                               # ),
                                             )
@@ -1664,8 +1736,10 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v0.9: November 2021"),
-              h6("email: gormleya@landcareresearch.co.nz")#,
+              h6("v0.9: December 2021"),
+              h6("email: gormleya@landcareresearch.co.nz")
+              # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
+              # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
               # h6("Developed using funding from Centre for Invasive Species Solutions (CISS), MBIE (New Zealand), and Island Conservation")
 )
 
