@@ -43,9 +43,18 @@ proj4string <- "+proj=tmerc +lat_0=0.0 +lon_0=173.0 +k=0.9996 +x_0=1600000.0 +y_
 resamp <- function(x,...){if(length(x)==1) x else sample(x,...)} 
 
 trap.cost.func<-function(a,b,c,d,e){
-  #e.g. trap.cost.func(a=check.interval, b=n.traps, c=input$traps.per.day, d=input$day.rate,e=cost.per.trap)
-  checks<-length(a)  #The number of trap checks to do = plus setup
-  trap.cost<-as.integer((((b*checks)/c)*d)+(b*e))
+  #e.g. trap.cost.func(a=number of checks, b=n.traps, c=input$traps.per.day, d=input$day.rate,e=cost.per.trap)
+  fixed.cost<-b*e
+  
+  # a<-2
+  # b<-100.5
+  # c<-50
+  # d<-100
+  # ceiling(2*b/c)/2*a*d
+  
+  labor.cost<-ceiling(2*b/c)/2*a*d #- scales up to a half day, mostly works 
+  trap.cost<-as.integer(labor.cost+fixed.cost)
+  # trap.cost<-as.integer((((b*checks)/c)*d)+(b*e))
   return(trap.cost)
 }
 
@@ -413,6 +422,13 @@ server<-function(input, output, session) {
           # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
           check.vec.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a)
           p.bycatch.a<-input$p.bycatch.a
+          
+          # trap.start.a<-1
+          # trap.nights.a<-10
+          # n.check.a<-11
+          # (trap.period.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a-1), by=1))
+          # (check.vec.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a))
+          
         }
         # if(input$show_trap_b==1){
         if(is.na(trap.start.b)==FALSE){
@@ -496,16 +512,22 @@ server<-function(input, output, session) {
         trap.cost.sim<-0
         bait.cost.sim<-0
         if(is.na(trap.start.a)==FALSE){
-          trap.cost.sim<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
+          checks<-ceiling(input$trap.nights.a/input$n.check.a)+1
+          # trap.cost.sim<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
+          trap.cost.sim<-trap.cost.func(a=checks, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
         }
         # if(input$show_trap_b==1){
         if(is.na(trap.start.b)==FALSE){
-          trap.cost.sim<-trap.cost.sim+trap.cost.func(a=check.vec.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
+          checks<-ceiling(input$trap.nights.b/input$n.check.b)+1
+          # trap.cost.sim<-trap.cost.sim+trap.cost.func(a=check.vec.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
+          trap.cost.sim<-trap.cost.sim+trap.cost.func(a=checks, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
         }
         
         if(is.na(bait.start.a)==FALSE){
-          bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
-        }
+          checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
+          # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+          bait.cost.sim<-trap.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)        
+          }
         
         
         
@@ -1169,8 +1191,9 @@ server<-function(input, output, session) {
     shp<-mydata.shp()$shp    
     traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)
     n.traps.a<-dim(traps.a)[1]
-    check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
-    cost<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
+    # check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
+    checks<-ceiling(input$trap.nights.a/input$n.check.a)+1  #The number of checks - copes with check intervals that dont fit nealy into the duration
+    cost<-trap.cost.func(a=checks, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
     
     return(paste0(n.traps.a," Traps\nCost = $", cost ))
   })
@@ -1179,8 +1202,9 @@ server<-function(input, output, session) {
     shp<-mydata.shp()$shp    
     traps.b<-make.trap.locs(input$traps.x.space.b, input$traps.y.space.b, 100, shp)
     n.traps.b<-dim(traps.b)[1]
-    check.vec.b<-seq(from=input$trap.start.b, to=(input$trap.start.b+input$trap.nights.b), by=input$n.check.b)
-    cost<-trap.cost.func(a=check.vec.b, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
+    # check.vec.b<-seq(from=input$trap.start.b, to=(input$trap.start.b+input$trap.nights.b), by=input$n.check.b)
+    checks<-ceiling(input$trap.nights.b/input$n.check.b)+1
+    cost<-trap.cost.func(a=checks, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
     
     return(paste0(n.traps.b," Traps\nCost = $", cost ))
   })
@@ -1191,14 +1215,20 @@ server<-function(input, output, session) {
     shp<-mydata.shp()$shp    
     bait.a<-make.trap.locs(input$bait.x.space.a, input$bait.y.space.a, 100, shp)
     n.bait.a<-dim(bait.a)[1]
-    bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
-    cost<-trap.cost.func(a=bait.check.vec.a, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+    # bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
+    checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
+    cost<-trap.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
     
     return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
   })
   
-
+output$text_density<-renderText({
+  ha<-mydata.shp()$ha
+  numb<-input$numb.poss
   
+  
+  return(paste0(round(numb/ha,2)," per ha"))
+})
   
   
   # output$text11<-renderText({
@@ -1312,7 +1342,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #   div(style="display:inline-block",
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
-                                                     radioButtons(inputId="area_type", label="Chose  area type",choices=c("Mahia Peninsula"="RC","Upload Shapefile"="Map"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula"="RC","Upload Shapefile"="Map"), selected="RC"),
                                                      #   
                                                      #   conditionalPanel(
                                                      #     condition="input.area_type=='Area'",
@@ -1338,6 +1368,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                          # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random","Habitat Specific"), selected="Random",width="250px")
                                                          radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
                                                      ),
+                                                     div(style="display:inline-block;vertical-align:bottom",
+                                                     verbatimTextOutput("text_density")),
                                                      tags$div(title="Sigma x 2.45 is the radius of a circle  where an indivudual spends 95% of its time.",
                                                               h5(strong("Home range (sigma)"))),
                                                      div(style="display:inline-block",
@@ -1393,7 +1425,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                    ),
                                    tabPanel("2. Control Methods",
 
-                                            h3("Choose 'Trapping' and/or 'Hunting' and then specify inputs for up to two methods of each. Click 'Add Scenario' to add them to the 'Run Scenarios' tab "),
+                                            # h3("Choose 'Trapping' and/or 'Hunting' and then specify inputs for up to two methods of each. Click 'Add Scenario' to add them to the 'Run Scenarios' tab "),
                                             fluidRow(
                                               column(width=2,
                                                      
@@ -1754,7 +1786,8 @@ shinyApp(ui=ui, server=server)
 #1.6 - removed zones - too fricking complicated, and got two methods of hunting and trapping in there. But no scenarios....
 #1.7.1 - scenarios are back! - with add and delete buttons.
 
-
+#Need to include bait costs...?
+#Group costs by labour and fixed costs...?
 
 
 
