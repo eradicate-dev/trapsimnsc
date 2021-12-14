@@ -1,10 +1,10 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-#            TrapSim Tool - Single species - Island Conservation
+#            TrapSim Tool - Multi Method
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Code developed by Andrew Gormley, Manaaki Whenua - Landcare Research
-#Tailored for the Island conservation coati eradication project.
+#Developed for the NSC Eco-economics project
 
 #Includes Audrey's grid based approach as well - Audrey says it works with cells of 500m and even 200m...(?)
 #28/8 - some testing would suggest that for nightly checking, setting the grid square dimension at 4*sigma is best when compared to IBM
@@ -1130,7 +1130,7 @@ server<-function(input, output, session) {
     ntraps<-dim(traps)[1]
     ha.area<-mydata.shp()$ha
     
-    paste(ntraps, " Traps (One per ",round(ha.area/ntraps,1)," ha", sep="")
+    paste(ntraps, " Traps (One per ",round(ha.area/ntraps,1)," ha)", sep="")
   })
   
   
