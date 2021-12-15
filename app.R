@@ -1046,6 +1046,19 @@ server<-function(input, output, session) {
   })
   
   
+  
+  
+  output$plot1<-renderPlot({
+    
+    res<-datab()$params
+    par(mar=c(4,4,1,1), mgp=c(2.5,1,0), tcl=-0.25)
+    plot(res$MeanPopSize, res$TotalCost, xlab="Final population", ylab="Total cost")
+    
+    
+  })
+  
+  
+  
   output$plot2<-renderPlot({
     trap.catch.list<-datab()$trap.catch.list
     trap.catch.mat<-trap.catch.list[[as.numeric(input$result_scenario)]]
@@ -1070,7 +1083,7 @@ server<-function(input, output, session) {
     points(nights.vec,cumsum(colMeans(bait.catch.mat)), bg=cols.vec[4], pch=22)
     
     legend("topleft", legend=c("Traps","Bait station"), pch=c(21,22), pt.bg=cols.vec[c(2,4)], bty="n")
-    # mtext("Cumulative captures: Trapping",3, cex=1.5, line=1)
+    mtext("Cumulative captures",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
   })
   
@@ -1740,7 +1753,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                    tabPanel("4. Results",
                                             fluidRow(
                                               column(width=2,
-                                                     selectInput("result_scenario","Choose Scenario to plot",choices=NULL)
+                                                     selectInput("result_scenario","Choose Scenario to plot",choices=NULL),
+                                                     plotOutput(outputId = "plot1", width = "350px", height="300px")
                                                      
                                               ),
                                               column(width=3,
