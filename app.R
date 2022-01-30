@@ -9,6 +9,8 @@
 #Includes Audrey's grid based approach as well - Audrey says it works with cells of 500m and even 200m...(?)
 #28/8 - some testing would suggest that for nightly checking, setting the grid square dimension at 4*sigma is best when compared to IBM
 
+#Doesn't currently have the grid-based part in there...
+
 
 library("shiny")
 library("shinythemes")
@@ -30,6 +32,7 @@ library("DT")
 def.shp<-"WhakatipuMahia"
 # shp.zones<-"Robinson_Coati_Workzones"
 ras.2<-raster("habitat_specific.asc")
+# ras.2<-raster("kposs2.asc")
 # ras.z2<-raster("huntingeffort.asc")
 
 # cols.tst<-brewer.pal(6,"Blues")
@@ -42,10 +45,10 @@ proj4string <- "+proj=tmerc +lat_0=0.0 +lon_0=173.0 +k=0.9996 +x_0=1600000.0 +y_
 #Define the resampling function
 resamp <- function(x,...){if(length(x)==1) x else sample(x,...)} 
 
+#Calculate the cost of trapping
 trap.cost.func<-function(a,b,c,d,e){
   #e.g. trap.cost.func(a=number of checks, b=n.traps, c=input$traps.per.day, d=input$day.rate,e=cost.per.trap)
-  fixed.cost<-b*e
-  
+  fixed.cost<-b*e  #n.traps x cost.per.trap
   # a<-2
   # b<-100.5
   # c<-50
@@ -58,6 +61,7 @@ trap.cost.func<-function(a,b,c,d,e){
   return(trap.cost)
 }
 
+#Calculate the cost of hunting
 hunt.cost.func<-function(a,b){
   day.rate<-a
   days.zone<-b
@@ -65,6 +69,7 @@ hunt.cost.func<-function(a,b){
   return(hunt.cost)
 }
 
+#For a given mean/sd, calculate the alpha & beta parameters
 get.alpha.beta<-function(g0.mean, g0.sd){
   g0.var<-g0.sd^2
   paren<-    (g0.var + g0.mean^2 - g0.mean)
@@ -73,6 +78,7 @@ get.alpha.beta<-function(g0.mean, g0.sd){
   return(list(alpha=alpha, beta=beta))
 }
 
+#For a given mean/sd, calculate the location and shape parameters for a log-normal distribution
 get.loc.shape<-function(sigma.mean, sigma.sd){
   m<-sigma.mean
   s<-sigma.sd
@@ -82,18 +88,33 @@ get.loc.shape<-function(sigma.mean, sigma.sd){
 }
 
 #Function to make animal locations from a raster of relative abundance/habitat.
+# Takes the raster, the number of possums and the shapefile
 get.pest.locs<-function(ras, n.poss, shp){
+  # 
+  # gridpolygon<-rasterToPolygons(ras)
+  # grids<-length(gridpolygon@data[,1])
+  # pest.per.grid<-round(gridpolygon@data[,1]*n.poss/grids,0)   #We want to sample more than we need because we are going to remove some that are outside the shapefile
+  # coords<-vector("list", grids) #Set up to save the coordinates - cant work out how to get spsample to sample across all grids
+  # for (i in 1: grids){
+  #   if(pest.per.grid[i]>0){
+  #     coords[[i]]<-spsample(gridpolygon@polygons[[i]], n =pest.per.grid[i] , type = "random")@coords
+  #   }
+  # }
+  # coords<-as.data.frame(do.call("rbind", coords)) #Put them altogether from the list
+  # 
+  buff<-n.poss/2
+  # Get the celll resolution
+  res.x<-res(ras)[1]
+  res.y<-res(ras)[1]
   
-  gridpolygon<-rasterToPolygons(ras)
-  grids<-length(gridpolygon@data[,1])
-  pest.per.grid<-round(gridpolygon@data[,1]*n.poss/grids,0)   #We want to sample more than we need becase we are going to remove some that are outside the shapefile
-  coords<-vector("list", grids) #Set up to save the coordinates - cant work out how to get spsample to sample across all grids
-  for (i in 1: grids){
-    if(pest.per.grid[i]>0){
-      coords[[i]]<-spsample(gridpolygon@polygons[[i]], n =pest.per.grid[i] , type = "random")@coords
-    }
-  }
-  coords<-as.data.frame(do.call("rbind", coords)) #Put them altogether from the list
+  df <- as.data.frame(ras, xy = T, na.rm = T)
+  sampled_cells <- sample(1:nrow(df), size = n.poss+buff, prob = df$habitat_specific, replace = T)
+  x.val<-df$x[(sampled_cells)]+res.x*(runif(n.poss+buff)-0.5)
+  y.val<-df$y[(sampled_cells)]+res.y*(runif(n.poss+buff)-0.5)
+  coords<-data.frame('x'=x.val, 'y'=y.val)
+
+  
+  
   coords<-coords[inside.owin(coords[,1], coords[,2], shp),]  #Remove the ones from outside the shapefile...
   coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
   
@@ -102,7 +123,10 @@ get.pest.locs<-function(ras, n.poss, shp){
 }
 
 
-#  Make the trap locations from a spacing, buffer and shapfile
+
+
+
+#  Make the trap locations from a x/y spacing, buffer and shapefile
 make.trap.locs<-function(x.space,y.space,buff,shp){
   
   b.box<-bbox(shp)
@@ -112,7 +136,7 @@ make.trap.locs<-function(x.space,y.space,buff,shp){
   
   traps<-as.data.frame((expand.grid(traps.x, traps.y)))
   colnames(traps)<-c("X","Y")
-  shp.buff<-gBuffer(shp,width=-buff)
+  shp.buff<-gBuffer(shp,width=-buff)   #Buffer in from the shapefuile edge
   #Remove traps that are outside the window,,,
   traps<-traps[inside.owin(traps[,1], traps[,2], shp.buff),]
   
@@ -120,28 +144,27 @@ make.trap.locs<-function(x.space,y.space,buff,shp){
 }
 
 
-# Function to split the input boxes for scenarios
-split.str<-function(a){
-  b<-as.numeric((strsplit(as.character(a),split= "/"))[[1]])
-  return(b)
-}
+# # Function to split the input boxes for scenarios - still needed?
+# split.str<-function(a){
+#   b<-as.numeric((strsplit(as.character(a),split= "/"))[[1]])
+#   return(b)
+# }
 #~~~~~~~~~~~~~~~~~  End functions ~~~~~~~~~~~~~~~~~~~~~~
 
 
 server<-function(input, output, session) {
-  
-  
+
   #~~~~~~ Set up the scenarios
-  scenParam <- reactiveVal()
+  scenParam <- reactiveVal()  #Can't recall why needed..
   
-  #Delete all scenarios 
+  #Code to delete all scenarios when the Delete All Rows is pressed
   observeEvent(input$deleteAllRows,{
     t<-scenParam()
     t <- t[-(1:dim(t)[1]),]
     scenParam(t)
   })
   
-  #Delete selected scenarios
+  #Code to delete selected scenarios when Delete Selected Rows is pressed
   observeEvent(input$deleteRows,{
     t<-scenParam()
     if (!is.null(input$tableDT_rows_selected)) {
@@ -151,10 +174,12 @@ server<-function(input, output, session) {
     scenParam(t)
   })
   
+  #Code to add a scenario when the Add Scenario button is pressed
   observeEvent(input$update,{
     # validate(
     #   need(input$trap_methods==TRUE | input$hunt_methods==TRUE,"You need at least trapping or hunting")
     # )
+    #~~~ Trapping ~~~
     x.space.a = NA
     y.space.a = NA
     trap.start.a = NA
@@ -213,7 +238,7 @@ server<-function(input, output, session) {
     
     # 
     
-    
+    #~~~ Bait Stations ~~~
     bait.start.a = NA
     bait.nights.a = NA
     bait.check.a = NA
@@ -231,6 +256,7 @@ server<-function(input, output, session) {
       bait.g.zero.a = input$bait.g.zero.a
     }
     
+    #Full scenario to add.
     to_add <- data.frame(
       x.space.a = x.space.a,
       y.space.a = y.space.a,
@@ -264,7 +290,7 @@ server<-function(input, output, session) {
     newScenParam <- rbind(scenParam(),to_add) # adding new data
     scenParam(newScenParam) # updating data
     
-    #Test for duplicated
+    #Test for duplicates and blank scenarios
     t<-scenParam()
     t<-t[!duplicated(t), ]        #Dont add duplicates
     t<-t[!rowSums(is.na(t))==21,]  #Dont add blank scenrios
@@ -275,24 +301,36 @@ server<-function(input, output, session) {
   })
   
   
-  #Read in the shapefile  
+  #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
   mydata.shp<-reactive({
+    
+    #1. The default shape - Mahia Peninsula - defined at the very top
     shp<-readOGR("Shapefiles",def.shp)
     
+    #2. 'Upload Shapefile, then read in all the components, 
     if(input$area_type=="Map"){
       if(is.null(input$shp.file)==FALSE){
-        
         myshape<-input$shp.file
         dir<-dirname(myshape[1,4])
         for ( i in 1:nrow(myshape)) {
           file.rename(myshape[i,4], paste0(dir,"/",myshape[i,1]))
         }
         getshp <- list.files(dir, pattern="*.shp", full.names=TRUE)
-        
         shp<-readShapePoly(getshp,proj4string=CRS(proj4string))
-        shp<-gBuffer(shp, width=1) #Can fix some orphaned holes issues
+        # shp<-gBuffer(shp, width=1) #Fixes some issues with orphaned holes
       }
     }
+    
+    #3. An indicative area
+    if(input$area_type=="Area"){
+      ha.tmp<-input$area.ha
+      size<-sqrt(ha.tmp*10000)
+      xy<-c(1730000,5620000)
+      a<-cbind(c(0,size,size,0, 0)+xy[1],c(0,0,size,size,0)+xy[2])
+      ID<-"a"
+      shp<-SpatialPolygons(list(Polygons(list(Polygon(a)),ID)), proj4string=CRS(proj4string))
+    }
+    
     proj4string<-crs(shp)  #get the proj string from the shapefile itself
     shp<-gBuffer(shp, width=1) #Can fix some orphaned holes issues
     ha<-sapply(slot(shp, "polygons"), slot, "area")/10000  
@@ -349,14 +387,15 @@ server<-function(input, output, session) {
   #~~~~~~~~~~  Now simulate the actual trapping...~~~~~~~~~~~~~~~~~~
   #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
   
-  #    When the simulations get run, automatically switch to the results tab. Noice!
+  #When the simulations get set to run, automatically switch to the results tab. Noice!
   observeEvent(input$act.btn.trapsim,{
     updateTabsetPanel(session, "inTabset",selected = "4. Results")
   })
   
+  #After pushing the RunTrapSim button,...
   datab<-eventReactive(input$act.btn.trapsim,{
     buffer<-100  #A single buffer
-    #Some validation stuff - need to fill this out more completely.
+    #Some validation stuff - need to fill this out more completely. - actually this wont work - now that we make a table of scenarios...
     validate(
       # need(input$traps.buff.a != "", "Please enter a value for the trap buffer"),
       need(input$traps.x.space.a != "", "Please enter a value for the X trap spacing"),
@@ -366,27 +405,24 @@ server<-function(input, output, session) {
       need(input$p.bycatch.a != "", "Please enter a value for the Daily bycatch rate"),
       need(input$max.catch.a != "", "Please enter a value for the prob of Max catch")
     )
-    
 
-    #Get the parameter values for the scenarios
-
+    #Read in all the parameter values for the scenarios
     params<-as.data.frame(scenParam())
     #Set up some places to store results 
     n.scen<-dim(params)[1]    
     pop.size.list<-vector("list",n.scen)
-    pop.zone.list<-vector("list",n.scen)
     trap.catch.list<-vector("list",n.scen)
     hunt.catch.list<-vector("list",n.scen)
     bait.catch.list<-vector("list",n.scen)
     # pop.size.zone.mat[[ii]][,t+1]
     
     withProgress(message="Running simulation ",value=0,{
-      
+      #Go through the scenarios one by one...
       for(kk in 1:n.scen){  #For each scenario...
         incProgress(kk/n.scen, detail = paste("Doing scenario ", kk," of", n.scen))
         
-        #Pass the parameters from params to a parameter name.
-        # #Trapping period
+        #Pass the parameters from params to a parameter name that will be used..
+        # Traps 1
         trap.start.a<-params$trap.start.a[kk]
         trap.nights.a<-params$trap.nights.a[kk]
         n.check.a<-params$check.interval.a[kk]
@@ -396,6 +432,7 @@ server<-function(input, output, session) {
         g0.mean.a<-params$g.mean.a[kk]
         g.zero.a<-params$g.zero.a[kk]
         
+        #Traps 2 - why do we have two trap types...?
         trap.start.b<-params$trap.start.b[kk]
         trap.nights.b<-params$trap.nights.b[kk]
         n.check.b<-params$check.interval.b[kk]
@@ -405,7 +442,7 @@ server<-function(input, output, session) {
         g0.mean.b<-params$g.mean.b[kk]
         g.zero.b<-params$g.zero.b[kk]
         
-        
+        #Bait 1
         bait.start.a<-params$bait.start.a[kk]
         bait.nights.a<-params$bait.nights.a[kk]
         bait.check.a<-params$bait.check.a[kk]
@@ -417,18 +454,13 @@ server<-function(input, output, session) {
         
         
         # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
+        #for the traps and the bait stations
         if(is.na(trap.start.a)==FALSE){
           trap.period.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a-1), by=1)
           # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
           check.vec.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a)
           p.bycatch.a<-input$p.bycatch.a
-          
-          # trap.start.a<-1
-          # trap.nights.a<-10
-          # n.check.a<-11
-          # (trap.period.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a-1), by=1))
-          # (check.vec.a<-seq(from=trap.start.a, to=(trap.start.a+trap.nights.a), by=n.check.a))
-          
+
         }
         # if(input$show_trap_b==1){
         if(is.na(trap.start.b)==FALSE){
@@ -439,7 +471,7 @@ server<-function(input, output, session) {
         
         if(is.na(bait.start.a)==FALSE){
           bait.period.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a-1), by=1)
-          # #This sets the trap checking interval. i.e. traps are cleared and reset on these nights only...
+          # #This sets the checking interval. - cleared and reset on these nights only...
           bait.check.vec.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a), by=bait.check.a)
           p.failure.a<-0#input$p.bycatch.a
         }
@@ -448,7 +480,7 @@ server<-function(input, output, session) {
         #How long to run the simulation for.
         n.nights<-input$n.nights
 
-        #The g0 uncertainty, and sigma values for traps and bait - not in params - but should be, 
+        #The g0 uncertainty, and sigma values for traps and bait. The sds are not in params - but should be!! 
         g0.sd.a<-input$g0.sd.a
         g0.sd.b<-input$g0.sd.b
         bait.g0.sd.a<-input$bait.g0.sd.a
@@ -500,10 +532,10 @@ server<-function(input, output, session) {
         
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
-        #Carrying capacity for the area
+        #Carrying capacity for the area in terms of total number of animals - should be grid based?
         K.tot<-K.poss*ha
         
-        n.poss<-input$numb.poss
+        n.poss<-input$numb.poss #- should this be a parameter...? Or better to leave - maybe leave cause can re-run with same params.
         
         max.catch.a<-input$max.catch.a
         max.catch.b<-input$max.catch.b
@@ -531,16 +563,16 @@ server<-function(input, output, session) {
         
         
         
-        if (input$sim_type=='grid'){
-          cell.width<-input$cell.width
-          cell.area.m2<-cell.width^2
-          
-          #Make the grid...
-          shp<-st_as_sf(shp)
-          shp_grid<-shp%>%st_make_grid(cellsize=cell.width, what="polygons")%>%st_intersection(shp)
-          grid.traps.master<-lengths(st_intersects(shp_grid, st_as_sf(traps)))#*max.catch  #Number in each cell
-          
-        }
+        # if (input$sim_type=='grid'){
+        #   cell.width<-input$cell.width
+        #   cell.area.m2<-cell.width^2
+        #   
+        #   #Make the grid...
+        #   shp<-st_as_sf(shp)
+        #   shp_grid<-shp%>%st_make_grid(cellsize=cell.width, what="polygons")%>%st_intersection(shp)
+        #   grid.traps.master<-lengths(st_intersects(shp_grid, st_as_sf(traps)))#*max.catch  #Number in each cell
+        #   
+        # }
         
         n_its<-input$n.its  #Number of iterations
         pop.size.mat<-matrix(NA,nrow=n_its,ncol=n.nights+1)
@@ -984,7 +1016,7 @@ server<-function(input, output, session) {
         params$MeanPopSize[kk]<-round(mean(pop.size.mat[,n.nights+1]),2)
         
         pop.size.list[[kk]]<-pop.size.mat
-        hunt.catch.list[[kk]]<-hunt.catch.mat
+        hunt.catch.list[[kk]]<-hunt.catch.mat   #This will be all 0s at the moment
         trap.catch.list[[kk]]<-trap.catch.mat
         bait.catch.list[[kk]]<-bait.catch.mat
         # cat(file=stderr(), "drawing histogram with", kk, "bins", "\n")
@@ -1355,18 +1387,18 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #   div(style="display:inline-block",
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
-                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula"="RC","Upload Shapefile"="Map"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
                                                      #   
-                                                     #   conditionalPanel(
-                                                     #     condition="input.area_type=='Area'",
-                                                     #     numericInput(inputId = "area.ha", label="Area (ha)", value=10000, width="120px")
-                                                     #   ),
+                                                       conditionalPanel(
+                                                         condition="input.area_type=='Area'",
+                                                         numericInput(inputId = "area.ha", label="Area (ha)", value=10000, width="120px")
+                                                       ),
                                                      #   
                                                      conditionalPanel(
                                                        condition="input.area_type=='Map'",
                                                        
                                                        tags$div(title="Be sure to select all the components (.shp, .dbf etc)",
-                                                                fileInput(inputId = "shp.file", label="Chose the VCZ Shapefile", accept=c('.shp','.dbf','.sbn','.sbx','.shx',".prj"), multiple=TRUE, width="200px")
+                                                                fileInput(inputId = "shp.file", label="Chose the shapefile", accept=c('.shp','.dbf','.sbn','.sbx','.shx',".prj"), multiple=TRUE, width="200px")
                                                        )
                                                      ),
                                                      verbatimTextOutput("text10")
@@ -1378,8 +1410,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      ),
                                                      div(style="display:inline-block;vertical-align:top",
                                                          # fileInput(inputId = "ras.1", label="Ascii file of relative abundance", accept=c('.asc'), multiple=FALSE, width="250px")
-                                                         # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random","Habitat Specific"), selected="Random",width="250px")
-                                                         radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
+                                                         radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random","Habitat Specific"), selected="Random",width="250px")
+                                                         # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
                                                      ),
                                                      div(style="display:inline-block;vertical-align:bottom",
                                                      verbatimTextOutput("text_density")),
@@ -1415,20 +1447,20 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                    )
                                             ),
                                             column(width=8,
-                                                   "This map is provided to visualise the area. The parameter values specified here are ", strong("not"), " included in the simulations",
+                                                   "This map is provided to visualise the area. The device spacings specified here are ", strong("not"), " included in the simulations",
                                                    p(),
                                                    # div(style="display:inline-block;vertical-align:bottom",
                                                    #     numericInput(inputId = "numb.poss.i", label="Population size", value=10, width="180px")
                                                    # ),
                                                    div(style="display:inline-block;vertical-align:bottom",
                                                        tags$div(title="The trap spacing in the east-west direction",
-                                                                numericInput(inputId = "traps.x.space.i", label="Trap space E-W (m)", value="1000",width="135px"))),
+                                                                numericInput(inputId = "traps.x.space.i", label="Spacing E-W (m)", value="1000",width="135px"))),
                                                    div(style="display:inline-block;vertical-align:bottom",
                                                        tags$div(title="The trap spacing in the north-south direction",
-                                                                numericInput(inputId = "traps.y.space.i", label="Trap space N-S (m)", value="1000",width="135px"))),
+                                                                numericInput(inputId = "traps.y.space.i", label="Spacing N-S (m)", value="1000",width="135px"))),
                                                    div(style="display:inline-block;vertical-align:bottom",
                                                        tags$div(title="The buffer from the edge",
-                                                                numericInput(inputId = "traps.buff.i", label="Buffer (m)", value="100", min=0, max=1000, width="110px"))),
+                                                                numericInput(inputId = "traps.buff.i", label="Edge buffer (m)", value="100", min=0, max=1000, width="110px"))),
                                                    div(style="width:300px;display:inline-block;vertical-align:bottom",
                                                        verbatimTextOutput("text5")),
                                                    # p(),
@@ -1782,7 +1814,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v0.9: December 2021"),
+              h6("v1.01: January 2022"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
               # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
