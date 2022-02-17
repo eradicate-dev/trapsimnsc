@@ -69,6 +69,16 @@ hunt.cost.func<-function(a,b){
   return(hunt.cost)
 }
 
+#Calculate the cost of hunting
+pois.cost.func<-function(a,b,c){
+  pois.per.ha<-a  #Cost per ha
+  hectares<-b   #Total hectars
+  pois.prop<-c/100  #Proportion of area treated.
+  pois.cost<-round(pois.per.ha*hectares*pois.prop,0)
+  return(pois.cost)
+}
+
+
 #For a given mean/sd, calculate the alpha & beta parameters
 get.alpha.beta<-function(g0.mean, g0.sd){
   g0.var<-g0.sd^2
@@ -186,7 +196,7 @@ server<-function(input, output, session) {
     trap.nights.a = NA
     check.interval.a = NA
     g.mean.a=NA
-    g.zero.a=NA    #This is ther proportion that is untrappable, not g0....
+    g.zero.a=NA    #This is the proportion that is untrappable, not g0....
     x.space.b = NA
     y.space.b = NA
     trap.start.b = NA
@@ -195,6 +205,8 @@ server<-function(input, output, session) {
     g.mean.b=NA
     g.zero.b=NA
     
+    
+    #Add the trap stuff
     if(input$trap_methods==1){    
       x.space.a = input$traps.x.space.a
       y.space.a = input$traps.y.space.a
@@ -255,7 +267,20 @@ server<-function(input, output, session) {
       bait.g.mean.a = input$bait.g0.mean.a
       bait.g.zero.a = input$bait.g.zero.a
     }
+
     
+    #~~~ Poisoning ~~~
+    pois.start.a = NA
+    pois.days.a = NA
+    pois.prop.a = NA
+    pois.pkill.a = NA
+    if(input$pois_methods==1){
+      pois.start.a = input$pois.start.a
+      pois.days.a = input$pois.days.a
+      pois.prop.a = input$pois.prop.a
+      pois.pkill.a = input$pois.pkill.a
+    }
+        
     #Full scenario to add.
     to_add <- data.frame(
       x.space.a = x.space.a,
@@ -278,7 +303,11 @@ server<-function(input, output, session) {
       bait.x.space.a = bait.x.space.a,
       bait.y.space.a = bait.y.space.a,
       bait.g.mean.a = bait.g.mean.a,
-      bait.g.zero.a = bait.g.zero.a
+      bait.g.zero.a = bait.g.zero.a,
+      pois.start.a = pois.start.a,
+      pois.days.a = pois.days.a,
+      pois.prop.a = pois.prop.a,
+      pois.pkill.a = pois.pkill.a
       # hunt.start.a = hunt.start.a,
       # hunt.days.a = hunt.days.a,
       # hunt.eff.a = hunt.eff.a,
@@ -293,7 +322,7 @@ server<-function(input, output, session) {
     #Test for duplicates and blank scenarios
     t<-scenParam()
     t<-t[!duplicated(t), ]        #Dont add duplicates
-    t<-t[!rowSums(is.na(t))==21,]  #Dont add blank scenrios
+    t<-t[!rowSums(is.na(t))==dim(t)[2],]  #Dont add blank scenarios
     scenParam(t)
     
     # scenParam<-rbind(scenParam,to_add)
@@ -414,6 +443,7 @@ server<-function(input, output, session) {
     trap.catch.list<-vector("list",n.scen)
     hunt.catch.list<-vector("list",n.scen)
     bait.catch.list<-vector("list",n.scen)
+    pois.catch.list<-vector("list",n.scen)
     # pop.size.zone.mat[[ii]][,t+1]
     
     withProgress(message="Running simulation ",value=0,{
@@ -452,6 +482,10 @@ server<-function(input, output, session) {
         bait.g0.mean.a<-params$bait.g.mean.a[kk]
         bait.g.zero.a<- params$bait.g.zero.a[kk]
         
+        pois.start.a<-params$pois.start.a[kk]
+        pois.days.a<-params$pois.days.a[kk]
+        pois.prop.a<-params$pois.prop.a[kk]
+        pois.pkill.a<-params$pois.pkill.a[kk]
         
         # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
         #for the traps and the bait stations
@@ -474,6 +508,12 @@ server<-function(input, output, session) {
           # #This sets the checking interval. - cleared and reset on these nights only...
           bait.check.vec.a<-seq(from=bait.start.a, to=(bait.start.a+bait.nights.a), by=bait.check.a)
           p.failure.a<-0#input$p.bycatch.a
+        }
+        
+        if(is.na(pois.start.a)==FALSE){
+          pois.period.a<-seq(from=pois.start.a, to=(pois.start.a+pois.days.a-1), by=1)
+          pois.pkill.actual<-pois.pkill.a*pois.prop.a/(10000)
+          pois.daily.pkill<-1-((1-pois.pkill.actual)^(1/pois.days.a))
         }
         
         
@@ -543,6 +583,7 @@ server<-function(input, output, session) {
         #~~~~Calculate the costs~~~~
         trap.cost.sim<-0
         bait.cost.sim<-0
+        pois.cost.sim<-0
         if(is.na(trap.start.a)==FALSE){
           checks<-ceiling(input$trap.nights.a/input$n.check.a)+1
           # trap.cost.sim<-trap.cost.func(a=check.vec.a, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
@@ -561,7 +602,9 @@ server<-function(input, output, session) {
           bait.cost.sim<-trap.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)        
           }
         
-        
+        if(is.na(pois.start.a)==FALSE){
+          pois.cost.sim<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=pois.prop.a)
+        }
         
         # if (input$sim_type=='grid'){
         #   cell.width<-input$cell.width
@@ -579,7 +622,8 @@ server<-function(input, output, session) {
         trap.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of trapping - for each iteration - how many that night/day
         bait.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of baiting - for each iteration - how many that night/day
         hunt.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of hunting
-        pop.size.zone.vec<-vector("list",n_its)
+        pois.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of poisoning
+        # pop.size.zone.vec<-vector("list",n_its)
         
         
         for(ii in 1:n_its){
@@ -607,6 +651,7 @@ server<-function(input, output, session) {
           coordinates(animals.xy) <- ~ X+Y
           proj4string(animals.xy) <- proj4string(shp)
           
+          #Calculate the g0 values...
           #g0 for traps
           if(is.na(trap.start.a)==FALSE){
           alpbet.a<-get.alpha.beta(g0.mean.a, g0.sd.a)
@@ -628,7 +673,7 @@ server<-function(input, output, session) {
             animals.xy$g0.b<-0
           }
           
-          #g0 for trap type 2
+          #g0 for bait stations
           if(is.na(bait.start.a)==FALSE){
             alpbet.bait<-get.alpha.beta(bait.g0.mean.a, bait.g0.sd.a)
             animals.xy$g0.bait<-rbeta(n.animals, alpbet.bait$alpha, alpbet.bait$beta)
@@ -648,7 +693,7 @@ server<-function(input, output, session) {
           animals.xy$Sigma<-rlnorm(n.animals ,meanlog=locshp$location, sdlog=locshp$shape)
           
           #The first one initialises for a grid based simulation - i.e. Audrey's model.
-          #The seond is the trap+animal pairwise 
+          #The second is the trap+animal pairwise  - i.e. it works out the probability of capture for each device and animal, by device type.
           if (input$sim_type=='grid'){
             animals.SP<-animals.xy
             coordinates(animals.SP) <- c( "X", "Y" )
@@ -684,9 +729,10 @@ server<-function(input, output, session) {
             }
           }
           
-          
+          #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           #~~~Now run the simulation of trapping the animals...
           # withProgress(message="Running Simulation",value=0,{
+          #Set up some storage matrices
           trap.catch.vec<-rep(0, n.nights)
           if(is.na(trap.start.a)==FALSE){
             trap.catch.a<-matrix(0,n.traps.a,n.nights)  			#Trap.catch stores the captures in each trap each night
@@ -702,10 +748,9 @@ server<-function(input, output, session) {
             bait.catch.a<-matrix(0,n.baits.a,n.nights)  			#Trap.catch stores the captures in each trap each night
             # bait.remain.a<-rep(max.catch.b, n.traps.b)
           }
-          
-          
-          
-          pop.size.zone.vec[[ii]]<-matrix(NA,nrow=4,ncol=n.nights+1)
+
+          pois.catch.vec<-rep(0, n.nights)
+          # pop.size.zone.vec[[ii]]<-matrix(NA,nrow=4,ncol=n.nights+1)
           # pop.size.zone.vec[[ii]][,1]<-table(over(animals.xy[animals.xy$Dead==0,], shp.2))
           
           
@@ -816,8 +861,21 @@ server<-function(input, output, session) {
               } #End of if t %in% trap.period
             }
             
-            
-            
+            #Now the poison operation...
+            if(is.na(pois.start.a)==FALSE){
+              if(t%in%pois.period.a==TRUE){
+                
+                # pois.daily.pkill<-0.2
+                # dead<-c(0,0,0,0,1,0,1,1,0,1,1,0,0,0,1,1,1,0,0,0,1,1)
+                # alive<-which(dead==0)
+                
+                alive<-which(animals.xy$Dead==0)
+                n.pois<-rbinom(1,length(alive),prob=pois.daily.pkill) #How many will be killed
+                idx.kill<-sample(alive,n.pois, replace=FALSE)     #Which ones will be killed
+                # dead[idx.kill]<-1
+                animals.xy$Dead[idx.kill]<-1
+                pois.catch.vec[t]<-n.pois
+              }}
             
             #Hunting
             
@@ -1002,6 +1060,11 @@ server<-function(input, output, session) {
             }else{
               bait.catch.mat[ii,]<-rep(0, n.nights)
             }
+            if(is.na(pois.start.a)==FALSE){
+              pois.catch.mat[ii,]<-pois.catch.vec #This is a single number for each night
+            }else{
+              pois.catch.mat[ii,]<-rep(0, n.nights)
+            }
           }
         }#End of iteration ii
         
@@ -1009,9 +1072,10 @@ server<-function(input, output, session) {
         # pop.zone.list[[kk]]<-apply(simplify2array(pop.size.zone.vec),c(1,2), mean)
         params$TrapCost[kk]<-trap.cost.sim
         params$BaitCost[kk]<-bait.cost.sim
+        params$PoisCost[kk]<-pois.cost.sim
         # params$HuntCost[kk]<-hunt.cost.sim
         # params$TotalCost[kk]<-hunt.cost.sim + trap.cost.sim
-        params$TotalCost[kk]<-trap.cost.sim+bait.cost.sim
+        params$TotalCost[kk]<-trap.cost.sim+bait.cost.sim+pois.cost.sim
         
         params$MeanPopSize[kk]<-round(mean(pop.size.mat[,n.nights+1]),2)
         
@@ -1019,6 +1083,7 @@ server<-function(input, output, session) {
         hunt.catch.list[[kk]]<-hunt.catch.mat   #This will be all 0s at the moment
         trap.catch.list[[kk]]<-trap.catch.mat
         bait.catch.list[[kk]]<-bait.catch.mat
+        pois.catch.list[[kk]]<-pois.catch.mat
         # cat(file=stderr(), "drawing histogram with", kk, "bins", "\n")
       } #End kk    
       
@@ -1028,9 +1093,10 @@ server<-function(input, output, session) {
     
     
     
-    params<-params[,c(25,24,22,23,1:21)]
+    # params<-params[,c(25,24,22,23,1:21)]
+    params<-params[,c(30,29,26,27,28,1:25)]
     
-    return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
+    return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
   )
   
@@ -1096,26 +1162,33 @@ server<-function(input, output, session) {
     trap.catch.mat<-trap.catch.list[[as.numeric(input$result_scenario)]]
     bait.catch.list<-datab()$bait.catch.list
     bait.catch.mat<-bait.catch.list[[as.numeric(input$result_scenario)]]
+    pois.catch.list<-datab()$pois.catch.list
+    pois.catch.mat<-pois.catch.list[[as.numeric(input$result_scenario)]]
     
     nights.vec<-1:input$n.nights
     ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
     ymax.b<-max(cumsum(colMeans(bait.catch.mat)))
-    ymax<-max(ymax.b, ymax.t)
+    ymax.p<-max(cumsum(colMeans(pois.catch.mat)))
+    ymax<-max(ymax.b, ymax.t, ymax.p)
     
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
     plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative kills", las=1)
     for(i in 1:input$n.its){
       lines(nights.vec,cumsum(trap.catch.mat[i,]), col=cols.vec[1])
       lines(nights.vec,cumsum(bait.catch.mat[i,]), col=cols.vec[3])
+      lines(nights.vec,cumsum(pois.catch.mat[i,]), col=cols.vec[5])
     }
     lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col=cols.vec[2])
     points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg=cols.vec[2], pch=21)
     
     lines(nights.vec,cumsum(colMeans(bait.catch.mat)), col=cols.vec[4])
     points(nights.vec,cumsum(colMeans(bait.catch.mat)), bg=cols.vec[4], pch=22)
+
+    lines(nights.vec,cumsum(colMeans(pois.catch.mat)), col=cols.vec[6])
+    points(nights.vec,cumsum(colMeans(pois.catch.mat)), bg=cols.vec[6], pch=23)
     
-    legend("topleft", legend=c("Traps","Bait station"), pch=c(21,22), pt.bg=cols.vec[c(2,4)], bty="n")
-    mtext("Cumulative captures",3, cex=1.5, line=1)
+    legend("topleft", legend=c("Traps","Bait station","Poison"), pch=c(21,22,23), pt.bg=cols.vec[c(2,4,6)], bty="n")
+    mtext("Cumulative kills",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
   })
   
@@ -1267,6 +1340,16 @@ server<-function(input, output, session) {
     return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
   })
   
+  
+  output$text_pois_a_cost<-renderText({
+    ha<-mydata.shp()$ha    
+    
+    pois.cost<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=input$pois.prop.a)
+    
+    return(paste0("Cost = $", pois.cost ))
+  })
+  
+  
 output$text_density<-renderText({
   ha<-mydata.shp()$ha
   numb<-input$numb.poss
@@ -1333,7 +1416,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 "))),
               fluidRow(
                 column(width=4,  
-                       h1("Pest Control DSS"),
+                       h1("Feasibility of Eradication - FoE"),
                        checkboxInput("showinfo","Background information and instructions"),
 
                        
@@ -1387,7 +1470,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #   div(style="display:inline-block",
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
-                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
+                                                     # radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map"), selected="RC"),
                                                      #   
                                                        conditionalPanel(
                                                          condition="input.area_type=='Area'",
@@ -1476,8 +1560,10 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      
                                                      wellPanel(
                                                        h5("Choose control method(s)"),
-                                                       checkboxInput(inputId="trap_methods", label="Trapping", value=TRUE),
-                                                       checkboxInput(inputId="bait_methods", label="Bait stations", value=TRUE)
+                                                       checkboxInput(inputId="trap_methods", label="Trapping", value=FALSE),
+                                                       checkboxInput(inputId="bait_methods", label="Bait stations", value=FALSE),
+                                                       # checkboxInput(inputId="hunt_methods", label="Hunting", value=FALSE),
+                                                       checkboxInput(inputId="pois_methods", label="Poisoning", value=FALSE)
                                                      )),
                                               column(width=1,
                                                      wellPanel(
@@ -1561,7 +1647,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                     checkboxInput(inputId = "show_trap_b",label="Second Trap Method", value=FALSE)
                                                 ),
                                                 conditionalPanel(
-                                                  condition="input.show_trap_b==1",
+                                                  condition="input.show_trap_b==2",
                                                   # wellPanel(
                                                   div(style="display:inline-block;vertical-align:bottom",h5("Trapping Method 2")),p(),
                                                   div(style="display:inline-block;vertical-align:bottom",
@@ -1684,7 +1770,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             # ), #End of TabPanel
                                             # tabPanel("Hunting",
                                             conditionalPanel(
-                                              condition="input.hunt_methods==1",
+                                              condition="input.hunt_methods==2",
                                               
                                               h4("Hunting"),
                                               wellPanel(
@@ -1698,52 +1784,47 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                              numericInput(inputId = "hunt.days.a", label="Days hunted", value="10", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "effort.a", label="Effort/day (m)", value="250", width="120px"))),
+                                                             numericInput(inputId = "effort.a", label="Distance hunted per day (m)", value="200", width="120px"))),
+                                                div(style="display:inline-block;vertical-align:middle",
+                                                    tags$div(title="help text ",
+                                                             numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.2", width="100px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
                                                              numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=500, width="120px"))),
+                                              )#End of wellpanel
+                                            ),#End of conditional panel 
+                                            
+                                            
+                                            
+                                            conditionalPanel(
+                                              condition="input.pois_methods==1",
+                                              
+                                              h4("Aerial poison"),
+                                              wellPanel(
+                                                
+                                                
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.k.a", label="K", value="3.2", width="100px"))),
+                                                             numericInput(inputId = "pois.start.a", label="Start day", value="30", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.rho.a", label="rho", value="0.1", width="100px"))),
+                                                             numericInput(inputId = "pois.days.a", label="Operation length", value="10", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
-                                                    verbatimTextOutput("texthunta")),
-                                                
-                                                p(),
-                                                
+                                                    tags$div(title="help text ",
+                                                             numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="80", width="120px"))),
+                                                div(style="display:inline-block;vertical-align:middle",
+                                                    tags$div(title="help text ",
+                                                             numericInput(inputId = "pois.pkill.a", label="Percent kill given exposure", value="90", width="100px"))),
+                                                div(style="display:inline-block;vertical-align:middle",
+                                                    tags$div(title="help text ",
+                                                             numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=50, width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    checkboxInput(inputId = "show_hunt_b",label="Second Hunting Method ?", value=FALSE)
-                                                ),
-                                                conditionalPanel(
-                                                  condition="input.show_hunt_b==1",
-                                                  
-                                                  div(style="display:inline-block;vertical-align:middle",h5("Hunting Method 2")),p(),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "hunt.start.b", label="Start day", value="50", width="120px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "hunt.days.b", label="Days hunted", value="20", width="120px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "effort.b", label="Effort/day (m)", value="150", width="120px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "day.rate.hunt.b", label="Day rate ($)", value=450, width="120px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "hunt.k.b", label="K", value="2.2", width="100px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      tags$div(title="help text ",
-                                                               numericInput(inputId = "hunt.rho.b", label="rho", value="0.12", width="100px"))),
-                                                  div(style="display:inline-block;vertical-align:middle",
-                                                      verbatimTextOutput("texthuntb"))
-                                                  
-                                                )
-                                              )
-                                            )
+                                                    verbatimTextOutput("text_pois_a_cost"))
+                                                
+                                              )#End of wellpanel
+                                            )#End of conditional panel 
+                                            
+                                            
                                             
                                    ),
 
