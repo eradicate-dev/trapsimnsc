@@ -64,12 +64,12 @@ trap.cost.func<-function(a,b,c,d,e){
 #Calculate the cost of hunting
 hunt.cost.func<-function(a,b){
   day.rate<-a
-  days.zone<-b
-  hunt.cost<-day.rate*sum(days.zone)
+  days.hunt<-b
+  hunt.cost<-day.rate*days.hunt
   return(hunt.cost)
 }
 
-#Calculate the cost of hunting
+#Calculate the cost of poisoning
 pois.cost.func<-function(a,b,c){
   pois.per.ha<-a  #Cost per ha
   hectares<-b   #Total hectars
@@ -229,16 +229,18 @@ server<-function(input, output, session) {
     
     
     # #Hunting    
-    # hunt.start.a = NA 
-    # hunt.days.a = NA
-    # hunt.eff.a = NA
+    hunt.start.a = NA
+    hunt.days.a = NA
+    hunt.eff.a = NA
+    hunt.rho.a = NA
     # hunt.start.b = NA 
     # hunt.days.b = NA
     # hunt.eff.b = NA
-    # if(input$hunt_methods==1){    
-    #   hunt.start.a = input$hunt.start.a
-    #   hunt.days.a = input$hunt.days.a
-    #   hunt.eff.a = input$effort.a 
+    if(input$hunt_methods==1){
+      hunt.start.a = input$hunt.start.a
+      hunt.days.a = input$hunt.days.a
+      hunt.eff.a = input$hunt.effort.a
+      hunt.rho.a = input$hunt.rho.a
     #   
     #   if(input$show_hunt_b==1){
     #     # if(is.na(hunt.start.b)==FALSE){
@@ -246,7 +248,7 @@ server<-function(input, output, session) {
     #     hunt.days.b = input$hunt.days.b
     #     hunt.eff.b = input$effort.b 
     #   }
-    # }
+    }
     
     # 
     
@@ -307,10 +309,11 @@ server<-function(input, output, session) {
       pois.start.a = pois.start.a,
       pois.days.a = pois.days.a,
       pois.prop.a = pois.prop.a,
-      pois.pkill.a = pois.pkill.a
-      # hunt.start.a = hunt.start.a,
-      # hunt.days.a = hunt.days.a,
-      # hunt.eff.a = hunt.eff.a,
+      pois.pkill.a = pois.pkill.a,
+      hunt.start.a = hunt.start.a,
+      hunt.days.a = hunt.days.a,
+      hunt.eff.a = hunt.eff.a,
+      hunt.rho.a = hunt.rho.a
       # hunt.start.b = hunt.start.b,
       # hunt.days.b = hunt.days.b,
       # hunt.eff.b = hunt.eff.b
@@ -482,6 +485,12 @@ server<-function(input, output, session) {
         bait.g0.mean.a<-params$bait.g.mean.a[kk]
         bait.g.zero.a<- params$bait.g.zero.a[kk]
         
+        hunt.start.a<-params$hunt.start.a[kk]
+        hunt.days.a<-params$hunt.days.a[kk]
+        hunt.eff.a<-params$hunt.eff.a[kk]
+        hunt.rho.a<-params$hunt.rho.a[kk]
+        
+      
         pois.start.a<-params$pois.start.a[kk]
         pois.days.a<-params$pois.days.a[kk]
         pois.prop.a<-params$pois.prop.a[kk]
@@ -512,10 +521,15 @@ server<-function(input, output, session) {
         
         if(is.na(pois.start.a)==FALSE){
           pois.period.a<-seq(from=pois.start.a, to=(pois.start.a+pois.days.a-1), by=1)
-          pois.pkill.actual<-pois.pkill.a*pois.prop.a/(10000)
+          pois.pkill.actual<-pois.pkill.a*pois.prop.a/(10000)  #Check why this is in here...
           pois.daily.pkill<-1-((1-pois.pkill.actual)^(1/pois.days.a))
         }
         
+        
+        if(is.na(hunt.start.a)==FALSE){
+          hunt.period.a<-seq(from=hunt.rho.a, to=(hunt.start.a+hunt.days.a-1), by=1)
+
+        }
         
         #How long to run the simulation for.
         n.nights<-input$n.nights
@@ -583,6 +597,7 @@ server<-function(input, output, session) {
         #~~~~Calculate the costs~~~~
         trap.cost.sim<-0
         bait.cost.sim<-0
+        hunt.cost.sim<-0
         pois.cost.sim<-0
         if(is.na(trap.start.a)==FALSE){
           checks<-ceiling(input$trap.nights.a/input$n.check.a)+1
@@ -601,6 +616,13 @@ server<-function(input, output, session) {
           # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
           bait.cost.sim<-trap.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)        
           }
+        
+        
+        
+          if(is.na(hunt.start.a)==FALSE){
+            hunt.cost.sim<-hunt.cost.func(a=input$day.rate.hunt.a, b=hunt.days.a)    
+          }
+        
         
         if(is.na(pois.start.a)==FALSE){
           pois.cost.sim<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=pois.prop.a)
@@ -1072,10 +1094,11 @@ server<-function(input, output, session) {
         # pop.zone.list[[kk]]<-apply(simplify2array(pop.size.zone.vec),c(1,2), mean)
         params$TrapCost[kk]<-trap.cost.sim
         params$BaitCost[kk]<-bait.cost.sim
+        params$HuntCost[kk]<-hunt.cost.sim
         params$PoisCost[kk]<-pois.cost.sim
         # params$HuntCost[kk]<-hunt.cost.sim
         # params$TotalCost[kk]<-hunt.cost.sim + trap.cost.sim
-        params$TotalCost[kk]<-trap.cost.sim+bait.cost.sim+pois.cost.sim
+        params$TotalCost[kk]<-trap.cost.sim+bait.cost.sim+hunt.cost.sim+pois.cost.sim
         
         params$MeanPopSize[kk]<-round(mean(pop.size.mat[,n.nights+1]),2)
         
@@ -1094,7 +1117,7 @@ server<-function(input, output, session) {
     
     
     # params<-params[,c(25,24,22,23,1:21)]
-    params<-params[,c(30,29,26,27,28,1:25)]
+    params<-params[,c(34,33,30,31,32,1:29)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1340,6 +1363,10 @@ server<-function(input, output, session) {
     return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
   })
   
+  output$text_hunt_a_cost<-renderText({
+    hunt.cost<-hunt.cost.func(a=input$hunt.days.a, b=input$day.rate.hunt.a)
+    return(paste0("Cost = $", hunt.cost ))
+  })
   
   output$text_pois_a_cost<-renderText({
     ha<-mydata.shp()$ha    
@@ -1416,16 +1443,22 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 "))),
               fluidRow(
                 column(width=4,  
-                       h1("Feasibility of Eradication - FoE"),
-                       checkboxInput("showinfo","Background information and instructions"),
-
+                       h1("Eradication Feasibility Simulator"),
+                       "v1.02"
+                       # checkboxInput("showinfo","Background information and instructions"),
+                       #Needs to be 4 characters - fuck
+# Feasibility of Pest Eradication FoPE or FPE
+# Feasibility of Eradication FoEs
+# Feasibility of Pest Control
+# Pest Eradication Feasibility PEF
+# How much control?  HMC
                        
                        # h3("Trapping Simulation Tool")
                 ),
                 column(8,
                        img(src="manaaki_logo.png", height = 90, align="right", hspace=20,vspace=10),
-                       # img(src="ari_logo.jpg", height = 90, align="right", hspace=20,vspace=10),
-                       img(src="bhnsc.png", height = 90, align="right", hspace=20,vspace=10)
+                       img(src="ciss_logo.jpg", height = 80, align="right", hspace=20,vspace=10),
+                       img(src="bhnsc.png", height = 80, align="right", hspace=20,vspace=10)
 
                        # img(src="IC_logo.png", height = 90, align="right", hspace=20,vspace=10)
                 )
@@ -1433,30 +1466,41 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               
               
               fluidRow(
-                column(width=5, 
-                       conditionalPanel(
-                         condition = "input.showinfo == 1",
-                         "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
-                         # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
-                         # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
-                         p(),"It is based on an earlier tool called TrapSim which was focused on simulating trapping only.",
-                         "For a background report on TrapSim, ", 
-                         tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"), p(),
-                         
-                         h3("Instructions"),                        
-                         "1. Set the area and pest parameters" ,br(),
-                         "2. Control Methods - set the various scenarios by selecting the control methods and the corresponding parameters. Click 'Add Scenario' to build up a list of scenarios", br(),
-                         "3. Run Sceanrios - check the scenarios, enter the number of iterations for each and the simulation length. Click 'Run TrapSim'", br(),
-                         "4. Results - explore the results  - graphs and tables of animals remaining, costs etc", br(),
-                         
-                         
-                         # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
-                         p(),
-                         strong("Hover cursor over each of the input boxes for pop-up help.")
-
-                       )
-                )
-              ),
+                column(width=5,
+              h3("How much control?"),
+              "This simulation app is intended to provide guidance as to the approximate level of control required to achieve desired level of pest reduction.",
+              "It is based on an earlier tool called TrapSim which simulated trapping only.",
+              "For a background report on TrapSim, ",
+              tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),p()
+                )),              
+              
+              
+              
+              # fluidRow(
+              #   column(width=5, 
+              #          conditionalPanel(
+              #            condition = "input.showinfo == 1",
+              #            "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
+              #            # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
+              #            # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
+              #            p(),"It is based on an earlier tool called TrapSim which was focused on simulating trapping only.",
+              #            "For a background report on TrapSim, ", 
+              #            tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"), p(),
+              #            
+              #            h3("Instructions"),                        
+              #            "1. Set the area and pest parameters" ,br(),
+              #            "2. Control Methods - set the various scenarios by selecting the control methods and the corresponding parameters. Click 'Add Scenario' to build up a list of scenarios", br(),
+              #            "3. Run Sceanrios - check the scenarios, enter the number of iterations for each and the simulation length. Click 'Run TrapSim'", br(),
+              #            "4. Results - explore the results  - graphs and tables of animals remaining, costs etc", br(),
+              #            
+              #            
+              #            # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
+              #            p(),
+              #            strong("Hover cursor over each of the input boxes for pop-up help.")
+              # 
+              #          )
+              #   )
+              # ),
               
               
               
@@ -1562,7 +1606,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                        h5("Choose control method(s)"),
                                                        checkboxInput(inputId="trap_methods", label="Trapping", value=FALSE),
                                                        checkboxInput(inputId="bait_methods", label="Bait stations", value=FALSE),
-                                                       # checkboxInput(inputId="hunt_methods", label="Hunting", value=FALSE),
+                                                       checkboxInput(inputId="hunt_methods", label="Hunting", value=FALSE),
                                                        checkboxInput(inputId="pois_methods", label="Poisoning", value=FALSE)
                                                      )),
                                               column(width=1,
@@ -1581,13 +1625,13 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:middle",h5("Trapping Method 1")),p(),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="The trap spacing in the east-west direction",
-                                                             numericInput(inputId = "traps.x.space.a", label="Spacing E-W (m)", value="1000",width="135px"))),
+                                                             numericInput(inputId = "traps.x.space.a", label="Spacing E-W (m)", value="500",width="135px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="The trap spacing in the north-south direction",
-                                                             numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="1000",width="135px"))),
+                                                             numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="500",width="135px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Nightly probability of by-catch, false triggers etc  ",
-                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0, width="120px"))),
+                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0.01, width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Maximum catch per trap  ",
                                                              numericInput(inputId = "max.catch.a", label="Max catch", value=1, width="135px"))),
@@ -1605,10 +1649,10 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                              numericInput(inputId = "trap.start.a", label="Start night", value="5", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="Number of nights traps are set for.",
-                                                             numericInput(inputId = "trap.nights.a", label="Duration (nights)", value="20", width="120px"))),
+                                                             numericInput(inputId = "trap.nights.a", label="Duration (nights)", value="30", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="The checking interval of the traps. For traps that are not cleared, set equal to Nights ",
-                                                             numericInput(inputId = "n.check.a", label="Check interval", value="1", width="120px"))),
+                                                             numericInput(inputId = "n.check.a", label="Check interval", value="7", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Number of traps checked per day",
                                                              numericInput(inputId = "traps.per.day.a", label="Traps checked per day", value=40, width="120px")
@@ -1622,7 +1666,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                     )),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Fixed cost ($) per trap",
-                                                             numericInput(inputId = "cost.per.trap.a", label="Fixed cost per trap ($)", value=20, width="120px")
+                                                             numericInput(inputId = "cost.per.trap.a", label="Fixed cost per trap ($)", value=25, width="120px")
                                                     )),
                                                 
                                                 div(style="display:inline-block;vertical-align:bottom",
@@ -1734,13 +1778,13 @@ ui<-fluidPage(theme=shinytheme("flatly"),
 
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="Start night of baiting.",
-                                                           numericInput(inputId = "bait.start.a", label="Start night", value="5", width="120px"))),
+                                                           numericInput(inputId = "bait.start.a", label="Start night", value="35", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="Number of nights baits are set for.",
                                                            numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
-                                                           numericInput(inputId = "bait.check.a", label="Check interval", value="10", width="120px"))),
+                                                           numericInput(inputId = "bait.check.a", label="Check interval", value="25", width="120px"))),
                                               
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Number of stations checked per day",
@@ -1770,7 +1814,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             # ), #End of TabPanel
                                             # tabPanel("Hunting",
                                             conditionalPanel(
-                                              condition="input.hunt_methods==2",
+                                              condition="input.hunt_methods==1",
                                               
                                               h4("Hunting"),
                                               wellPanel(
@@ -1784,13 +1828,15 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                              numericInput(inputId = "hunt.days.a", label="Days hunted", value="10", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "effort.a", label="Distance hunted per day (m)", value="200", width="120px"))),
+                                                             numericInput(inputId = "hunt.effort.a", label="Distance hunted per day (m)", value="200", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
                                                              numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.2", width="100px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
                                                              numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=500, width="120px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    verbatimTextOutput("text_hunt_a_cost"))
                                               )#End of wellpanel
                                             ),#End of conditional panel 
                                             
@@ -1805,19 +1851,19 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.start.a", label="Start day", value="30", width="120px"))),
+                                                             numericInput(inputId = "pois.start.a", label="Start day", value="60", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.days.a", label="Operation length", value="10", width="120px"))),
+                                                             numericInput(inputId = "pois.days.a", label="Operation length", value="5", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="80", width="120px"))),
+                                                             numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="50", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
                                                              numericInput(inputId = "pois.pkill.a", label="Percent kill given exposure", value="90", width="100px"))),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=50, width="120px"))),
+                                                             numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=20, width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     verbatimTextOutput("text_pois_a_cost"))
                                                 
@@ -1830,7 +1876,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
 
                                    tabPanel("3. Run Scenarios",
                                             # tableOutput('scenarios.table'),
-                                            h3("Use this tab to check scenarios, and delete them if needed (click on the rows to delete), then click 'Run TrapSim' to run the simulations."),
+                                            h3("Use this tab to check scenarios, and delete them if needed (click on the rows to delete), then click 'Run Simulations' to run the simulations."),
                                             fluidRow(
                                               column(width=2,
                                                      wellPanel(
@@ -1844,8 +1890,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      )),
                                               column(width=1,
                                                      wellPanel(
+                                                       tags$style(type="text/css", "textarea {width:100%}"),
                                                        div(style="display:inline-block;vertical-align:bottom",
-                                                           actionButton("act.btn.trapsim","Run TrapSim"))
+                                                           actionButton("act.btn.trapsim","Run Simulations"))
                                                        
                                                      )
                                               )
@@ -1889,13 +1936,33 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                             )
                                             
-                                   )
+                                   ),
+                                   tabPanel("5. Help",
+                                            fluidRow(
+                                              column(width=12,
+                                              h3("Instructions"),
+                                              "The app consist of 4 tabs:",br(),
+                                              "1. Area and Pest Parameters",br(),"- Set the area (default is Mahia Peninsula, or upload a shapefile).",
+                                              " Set the pest parameters: number of animals, home range size (specified as sigma), and reproductive rates (Rmax = growth, start day of breeding and length of breeding period) " ,br(),
+                                              "2. Control Methods",br(),"- Currently there are 3 control methods to chose from. Set a control scenario by one or more methods.",
+                                              " There are various parameters for each relating to start deployment start day/length, spacing etc. Click 'Add Scenario' to add your control to the list of scenarios you wish to model. (These will appear in Tab 3). You can build up as many Control scenarios as you like.", br(),
+                                              "3. Run Sceanrios ",br(),"- When you have specified the set of control scenarios you wish to model, use this tab to check  the scenarios (you can delete one or all of them).",
+                                              " Enter the number of iterations for each and the simulation length in days. Click 'Run Simulation'", br(),
+                                              "4. Results ",br(),"- Explore the results  - graphs and tables of animals remaining, Total costs etc", br(),
+                                              
+                                              
+                                              # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
+                                              p(),
+                                              strong("Hover cursor over each of the input boxes for pop-up help.")
+                                              
+                                            )))
                                    
-                       ))
+                       )
+                )
               ), #End of Row
               
               
-              h6("v1.01: January 2022"),
+              h6("v1.02: February 2022"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
               # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
@@ -1912,6 +1979,7 @@ shinyApp(ui=ui, server=server)
 #1.5.2 - outputs by zones as well. 
 #1.6 - removed zones - too fricking complicated, and got two methods of hunting and trapping in there. But no scenarios....
 #1.7.1 - scenarios are back! - with add and delete buttons.
+#1.01 - included aerial poisoning - and baiting and costs
 
 #Need to include bait costs...?
 #Group costs by labour and fixed costs...?
