@@ -528,7 +528,7 @@ server<-function(input, output, session) {
         
         if(is.na(hunt.start.a)==FALSE){
           hunt.period.a<-seq(from=hunt.start.a, to=(hunt.start.a+hunt.days.a-1), by=1)
-          Eff<-hunt.eff.a/ha
+          Eff<-hunt.eff.a/mydata.shp()$ha
           H<-log(Eff+1)
           hunt.daily.pkill<-1-exp(-(hunt.rho.a*H))
 
