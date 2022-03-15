@@ -49,12 +49,6 @@ resamp <- function(x,...){if(length(x)==1) x else sample(x,...)}
 trap.cost.func<-function(a,b,c,d,e){
   #e.g. trap.cost.func(a=number of checks, b=n.traps, c=input$traps.per.day, d=input$day.rate,e=cost.per.trap)
   fixed.cost<-b*e  #n.traps x cost.per.trap
-  # a<-2
-  # b<-100.5
-  # c<-50
-  # d<-100
-  # ceiling(2*b/c)/2*a*d
-  
   labor.cost<-ceiling(2*b/c)/2*a*d #- scales up to a half day, mostly works 
   trap.cost<-as.integer(labor.cost+fixed.cost)
   # trap.cost<-as.integer((((b*checks)/c)*d)+(b*e))
