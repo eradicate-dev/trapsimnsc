@@ -32,8 +32,6 @@ library("DT")
 def.shp<-"WhakatipuMahia"
 # shp.zones<-"Robinson_Coati_Workzones"
 ras.2<-raster("habitat_specific.asc")
-# ras.2<-raster("kposs2.asc")
-# ras.z2<-raster("huntingeffort.asc")
 
 # cols.tst<-brewer.pal(6,"Blues")
 cols.vec<-brewer.pal(8,"Paired")
