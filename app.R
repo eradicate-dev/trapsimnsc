@@ -4,7 +4,7 @@
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 #Code developed by Andrew Gormley, Manaaki Whenua - Landcare Research
-#Developed for the NSC Eco-economics project
+#Developed for the NSC Eco-economics project and CISS
 
 #Includes Audrey's grid based approach as well - Audrey says it works with cells of 500m and even 200m...(?)
 #28/8 - some testing would suggest that for nightly checking, setting the grid square dimension at 4*sigma is best when compared to IBM
@@ -1117,7 +1117,7 @@ server<-function(input, output, session) {
     
     
     # params<-params[,c(25,24,22,23,1:21)]
-    params<-params[,c(34,33,30,31,32,1:29)]
+    params<-params[,c(35,34,33,30,31,32,1:29)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1170,7 +1170,7 @@ server<-function(input, output, session) {
   
   
   output$plot1<-renderPlot({
-    
+    #This is the plot of cost vs number left...?
     res<-datab()$params
     par(mar=c(4,4,1,1), mgp=c(2.5,1,0), tcl=-0.25)
     plot(res$MeanPopSize, res$TotalCost, xlab="Final population", ylab="Total cost")
