@@ -527,7 +527,10 @@ server<-function(input, output, session) {
         
         
         if(is.na(hunt.start.a)==FALSE){
-          hunt.period.a<-seq(from=hunt.rho.a, to=(hunt.start.a+hunt.days.a-1), by=1)
+          hunt.period.a<-seq(from=hunt.start.a, to=(hunt.start.a+hunt.days.a-1), by=1)
+          Eff<-hunt.eff.a/ha
+          H<-log(Eff+1)
+          hunt.daily.pkill<-1-exp(-(hunt.rho.a*H))
 
         }
         
@@ -772,6 +775,7 @@ server<-function(input, output, session) {
           }
 
           pois.catch.vec<-rep(0, n.nights)
+          hunt.catch.vec<-rep(0, n.nights)
           # pop.size.zone.vec[[ii]]<-matrix(NA,nrow=4,ncol=n.nights+1)
           # pop.size.zone.vec[[ii]][,1]<-table(over(animals.xy[animals.xy$Dead==0,], shp.2))
           
@@ -900,10 +904,19 @@ server<-function(input, output, session) {
               }}
             
             #Hunting
+            if(is.na(hunt.start.a)==FALSE){
+              if(t%in%hunt.period.a==TRUE){
+
+                alive<-which(animals.xy$Dead==0)
+                n.hunt<-rbinom(1,length(alive),prob=hunt.daily.pkill) #How many will be killed
+                idx.kill<-sample(alive,n.hunt, replace=FALSE)     #Which ones will be killed
+                # dead[idx.kill]<-1
+                animals.xy$Dead[idx.kill]<-1
+                hunt.catch.vec[t]<-n.hunt
+              }}
+            # hunt.catch.mat[ii,t]<-0
             
-            
-            
-            hunt.vec<-c(0,0)
+            # hunt.vec<-c(0,0)
             # zones<-c("A","B","C","D")
             
             # zz<-ifelse(input$show_hunt_b==TRUE,2,1)
@@ -934,7 +947,7 @@ server<-function(input, output, session) {
             #   }
             #   hunt.catch.mat[ii,t]<-sum(hunt.vec)
             # }else{
-              hunt.catch.mat[ii,t]<-0
+              # hunt.catch.mat[ii,t]<-0
             # }
             
             #~~~~~~~~~~~~~~~~~~~~~Reproduction~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1087,6 +1100,11 @@ server<-function(input, output, session) {
             }else{
               pois.catch.mat[ii,]<-rep(0, n.nights)
             }
+            if(is.na(hunt.start.a)==FALSE){
+              hunt.catch.mat[ii,]<-hunt.catch.vec #This is a single number for each night
+            }else{
+              hunt.catch.mat[ii,]<-rep(0, n.nights)
+            }
           }
         }#End of iteration ii
         
@@ -1119,7 +1137,7 @@ server<-function(input, output, session) {
     # params<-params[,c(25,24,22,23,1:21)]
     params<-params[,c(35,34,33,30,31,32,1:29)]
     
-    return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
+    return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
   )
   
@@ -1187,12 +1205,15 @@ server<-function(input, output, session) {
     bait.catch.mat<-bait.catch.list[[as.numeric(input$result_scenario)]]
     pois.catch.list<-datab()$pois.catch.list
     pois.catch.mat<-pois.catch.list[[as.numeric(input$result_scenario)]]
+    hunt.catch.list<-datab()$hunt.catch.list
+    hunt.catch.mat<-hunt.catch.list[[as.numeric(input$result_scenario)]]
     
     nights.vec<-1:input$n.nights
     ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
     ymax.b<-max(cumsum(colMeans(bait.catch.mat)))
     ymax.p<-max(cumsum(colMeans(pois.catch.mat)))
-    ymax<-max(ymax.b, ymax.t, ymax.p)
+    ymax.h<-max(cumsum(colMeans(hunt.catch.mat)))
+    ymax<-max(ymax.b, ymax.t, ymax.p, ymax.h)
     
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
     plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,ymax), type='n', xlab="Nights", ylab="Cumulative kills", las=1)
@@ -1200,6 +1221,7 @@ server<-function(input, output, session) {
       lines(nights.vec,cumsum(trap.catch.mat[i,]), col=cols.vec[1])
       lines(nights.vec,cumsum(bait.catch.mat[i,]), col=cols.vec[3])
       lines(nights.vec,cumsum(pois.catch.mat[i,]), col=cols.vec[5])
+      lines(nights.vec,cumsum(hunt.catch.mat[i,]), col=cols.vec[7])
     }
     lines(nights.vec,cumsum(colMeans(trap.catch.mat)), col=cols.vec[2])
     points(nights.vec,cumsum(colMeans(trap.catch.mat)), bg=cols.vec[2], pch=21)
@@ -1210,7 +1232,10 @@ server<-function(input, output, session) {
     lines(nights.vec,cumsum(colMeans(pois.catch.mat)), col=cols.vec[6])
     points(nights.vec,cumsum(colMeans(pois.catch.mat)), bg=cols.vec[6], pch=23)
     
-    legend("topleft", legend=c("Traps","Bait station","Poison"), pch=c(21,22,23), pt.bg=cols.vec[c(2,4,6)], bty="n")
+    lines(nights.vec,cumsum(colMeans(hunt.catch.mat)), col=cols.vec[8])
+    points(nights.vec,cumsum(colMeans(hunt.catch.mat)), bg=cols.vec[8], pch=24)
+
+    legend("topleft", legend=c("Traps","Bait station","Poison", "Hunting"), pch=c(21,22,23, 24), pt.bg=cols.vec[c(2,4,6,8)], bty="n")
     mtext("Cumulative kills",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
   })
@@ -1962,7 +1987,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.02: February 2022"),
+              h6("v1.03: March 2022"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
               # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
