@@ -1393,23 +1393,15 @@ server<-function(input, output, session) {
     return(paste0("Cost = $", pois.cost ))
   })
   
-  
+#The number of animals per hectare shown in Tab 1 under Pest Parameters  
 output$text_density<-renderText({
   ha<-mydata.shp()$ha
   numb<-input$numb.poss
-  
-  
   return(paste0(round(numb/ha,2)," per ha"))
 })
   
   
-  # output$text11<-renderText({
-  #   ha<-mydata()$ha
-  #   hunt.cell.size<-input$hunt.cell.size
-  #   return(paste0("Number of cells ", round(ha/hunt.cell.size,0)))
-  # })
-  
-  
+
   # output$scenario_dropdown<-renderUI({
   #   
   #   params<-mydata.c()$params
@@ -1417,29 +1409,15 @@ output$text_density<-renderText({
   #   selectInput("result_scenario","Choose Scenario to plot",params$Scenario)
   #   
   # })
-  output$texthunta<-renderText({
-    p.hunt.day<-mydata.hunt.prob()$p.hunt.day
-    return(paste0("Daily kill prob ", round(p.hunt.day[1],2)))
-  })
-  output$texthuntb<-renderText({
-    p.hunt.day<-mydata.hunt.prob()$p.hunt.day
-    return(paste0("Daily kill prob ", round(p.hunt.day[2],2)))
-  })
-  # 
+
   
-  
+  #This contains the results 
   output$results.table<-renderDataTable({
-    
     datab()$params
-    
   })
   
-  # output$scenarios.table<-renderTable({
-  #   
-  #   mydata.scen()$params
-  #   
-  # })
-  
+
+  #This contains the scenarios on Tab 3: Run Scenarios
   output$tableDT <- DT::renderDataTable(
     scenParam()
   )
