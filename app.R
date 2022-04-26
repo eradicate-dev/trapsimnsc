@@ -12,6 +12,8 @@
 #Doesn't currently have the grid-based part in there...
 
 
+#Testing to see that things push to the correct place...
+
 library("shiny")
 library("shinythemes")
 library("leaflet")
@@ -521,8 +523,8 @@ server<-function(input, output, session) {
         if(is.na(hunt.start.a)==FALSE){
           hunt.period.a<-seq(from=hunt.start.a, to=(hunt.start.a+hunt.days.a-1), by=1)
           Eff<-hunt.eff.a/mydata.shp()$ha
-          H<-log(Eff+1)
-          hunt.daily.pkill<-1-exp(-(hunt.rho.a*H))
+          # H<-log(Eff+1)
+          hunt.daily.pkill<-1-exp(-(hunt.rho.a*Eff))
 
         }
         
@@ -1441,19 +1443,14 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                        h1("Eradication Feasibility Simulator"),
                        "v1.02"
                        # checkboxInput("showinfo","Background information and instructions"),
-                       #Needs to be 4 characters - fuck
-# Feasibility of Pest Eradication FoPE or FPE
-# Feasibility of Eradication FoEs
-# Feasibility of Pest Control
-# Pest Eradication Feasibility PEF
-# How much control?  HMC
-                       
+
                        # h3("Trapping Simulation Tool")
                 ),
                 column(8,
                        img(src="manaaki_logo.png", height = 90, align="right", hspace=20,vspace=10),
                        img(src="ciss_logo.jpg", height = 80, align="right", hspace=20,vspace=10),
-                       img(src="bhnsc.png", height = 80, align="right", hspace=20,vspace=10)
+                       # img(src="bhnsc.png", height = 80, align="right", hspace=20,vspace=10)
+                       img(src="ari_logo.jpg", height = 80, align="right", hspace=20,vspace=10)
 
                        # img(src="IC_logo.png", height = 90, align="right", hspace=20,vspace=10)
                 )
@@ -1469,36 +1466,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),p()
                 )),              
               
-              
-              
-              # fluidRow(
-              #   column(width=5, 
-              #          conditionalPanel(
-              #            condition = "input.showinfo == 1",
-              #            "This simulation app is intended to provide guidance as to the approximate amount of trapping/baiting that you may require to achieve a various levels of pest reduction.",
-              #            # "You can specify an area of a specified size, or upload a shapefile of the area of interest.",
-              #            # "When you have set up the area, trap layout and pest parameters, click the", strong("Run Trap Sim"), "button at the bottom of the page to run the trapping simulation.",
-              #            p(),"It is based on an earlier tool called TrapSim which was focused on simulating trapping only.",
-              #            "For a background report on TrapSim, ", 
-              #            tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"), p(),
-              #            
-              #            h3("Instructions"),                        
-              #            "1. Set the area and pest parameters" ,br(),
-              #            "2. Control Methods - set the various scenarios by selecting the control methods and the corresponding parameters. Click 'Add Scenario' to build up a list of scenarios", br(),
-              #            "3. Run Sceanrios - check the scenarios, enter the number of iterations for each and the simulation length. Click 'Run TrapSim'", br(),
-              #            "4. Results - explore the results  - graphs and tables of animals remaining, costs etc", br(),
-              #            
-              #            
-              #            # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
-              #            p(),
-              #            strong("Hover cursor over each of the input boxes for pop-up help.")
-              # 
-              #          )
-              #   )
-              # ),
-              
-              
-              
+
               fixedRow(
                 column(width=12,
                        tabsetPanel(id="inTabset",
