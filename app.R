@@ -67,7 +67,7 @@ hunt.cost.func<-function(a,b){
 #Calculate the cost of poisoning
 pois.cost.func<-function(a,b,c){
   pois.per.ha<-a  #Cost per ha
-  hectares<-b   #Total hectars
+  hectares<-b   #Total hectares
   pois.prop<-c/100  #Proportion of area treated.
   pois.cost<-round(pois.per.ha*hectares*pois.prop,0)
   return(pois.cost)
@@ -265,13 +265,21 @@ server<-function(input, output, session) {
     #~~~ Poisoning ~~~
     pois.start.a = NA
     pois.days.a = NA
-    pois.prop.a = NA
+    # pois.prop.a = NA
     pois.pkill.a = NA
+    pois.area.a = NA
     if(input$pois_methods==1){
       pois.start.a = input$pois.start.a
       pois.days.a = input$pois.days.a
-      pois.prop.a = input$pois.prop.a
+      # pois.prop.a = input$pois.prop.a
       pois.pkill.a = input$pois.pkill.a
+      pois.area.a = round(gArea(shp)/10000,0)
+      if(input$pois_mask==1){
+        r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
+        pois.area.a<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
+        
+      }
+      
     }
         
     #Full scenario to add.
@@ -299,7 +307,8 @@ server<-function(input, output, session) {
       bait.g.zero.a = bait.g.zero.a,
       pois.start.a = pois.start.a,
       pois.days.a = pois.days.a,
-      pois.prop.a = pois.prop.a,
+      # pois.prop.a = pois.prop.a,
+      pois.area.a = pois.area.a,
       pois.pkill.a = pois.pkill.a,
       hunt.start.a = hunt.start.a,
       hunt.days.a = hunt.days.a,
@@ -329,6 +338,7 @@ server<-function(input, output, session) {
   #   fileInput(inputId = "hunt_asc",
   # 
   
+  #Read in the hunting mask
   mydata.hunt<-reactive({
     # ras.hunt<-ras.2
     if(input$hunt_mask==1){
@@ -340,6 +350,17 @@ server<-function(input, output, session) {
     return(list(ras.hunt=ras.hunt))
   })
   
+  #Read in the aerial mask
+  mydata.pois<-reactive({
+    # ras.hunt<-ras.2
+    if(input$pois_mask==1){
+      if(is.null(input$pois_asc)==FALSE){
+        myraster<-input$pois_asc$datapath
+        ras.pois<-raster(myraster)
+        
+      }}
+    return(list(ras.pois=ras.pois))
+  })
   
   #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
   mydata.shp<-reactive({
@@ -502,7 +523,7 @@ server<-function(input, output, session) {
       
         pois.start.a<-params$pois.start.a[kk]
         pois.days.a<-params$pois.days.a[kk]
-        pois.prop.a<-params$pois.prop.a[kk]
+        # pois.prop.a<-params$pois.prop.a[kk]
         pois.pkill.a<-params$pois.pkill.a[kk]
         
         # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
@@ -530,7 +551,8 @@ server<-function(input, output, session) {
         
         if(is.na(pois.start.a)==FALSE){
           pois.period.a<-seq(from=pois.start.a, to=(pois.start.a+pois.days.a-1), by=1)
-          pois.pkill.actual<-pois.pkill.a*pois.prop.a/(10000)  #Check why this is in here...
+          # pois.pkill.actual<-pois.pkill.a*pois.prop.a/(10000)  #Check why this is in here...
+          pois.pkill.actual<-pois.pkill.a/(100)  
           pois.daily.pkill<-1-((1-pois.pkill.actual)^(1/pois.days.a))
         }
         
@@ -637,7 +659,13 @@ server<-function(input, output, session) {
         
         
         if(is.na(pois.start.a)==FALSE){
-          pois.cost.sim<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=pois.prop.a)
+          pois.ha<-ha
+          if(input$pois_mask==1){
+            r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
+            pois.ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
+          }
+          
+          pois.cost.sim<-pois.cost.func(a=input$pois.per.ha.a, b=pois.ha, c=100)#pois.prop.a)
         }
         
         # if (input$sim_type=='grid'){
@@ -900,14 +928,21 @@ server<-function(input, output, session) {
             if(is.na(pois.start.a)==FALSE){
               if(t%in%pois.period.a==TRUE){
                 
-                # pois.daily.pkill<-0.2
-                # dead<-c(0,0,0,0,1,0,1,1,0,1,1,0,0,0,1,1,1,0,0,0,1,1)
-                # alive<-which(dead==0)
-                
+                if(input$pois_mask==1){
+                  ras.pois<-mydata.pois()$ras.pois
+                  cell.idx<-cellFromXY(ras.pois,animals.xy[,1:2])
+                  # cell.idx
+                  cell.pois<-which(values(ras.pois)%in%1)  #which cells are hunting ones...?
+                  # cell.hunt
+                  idx.target<-which(cell.idx%in%cell.pois & animals.xy$Dead==0) #Which animals are targets...
+                  n.pois<-rbinom(1,length(idx.target),prob=pois.daily.pkill)#hunt.daily.pkill) #How many will be killed
+                  idx.kill<-sample(idx.target,n.pois, replace=FALSE)     #Which ones will be killed
+                  
+                }else{
                 alive<-which(animals.xy$Dead==0)
                 n.pois<-rbinom(1,length(alive),prob=pois.daily.pkill) #How many will be killed
                 idx.kill<-sample(alive,n.pois, replace=FALSE)     #Which ones will be killed
-                # dead[idx.kill]<-1
+                }
                 animals.xy$Dead[idx.kill]<-1
                 pois.catch.vec[t]<-n.pois
               }}
@@ -922,14 +957,10 @@ server<-function(input, output, session) {
                   # cell.idx
                   cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
                   # cell.hunt
-                  
-                  
                   idx.target<-which(cell.idx%in%cell.hunt & animals.xy$Dead==0) #Which animals are targets...
                   n.hunt<-rbinom(1,length(idx.target),prob=hunt.daily.pkill)#hunt.daily.pkill) #How many will be killed
                   idx.kill<-sample(idx.target,n.hunt, replace=FALSE)     #Which ones will be killed
-                  # dead[idx.kill]<-1
-                  # animals.xy$Dead[idx.kill]<-1
-                  
+
                 }else{
                 
                 
@@ -1169,6 +1200,7 @@ server<-function(input, output, session) {
     
     # params<-params[,c(25,24,22,23,1:21)]
     params<-params[,c(35,34,33,30,31,32,1:29)]
+    # params<-params[,c(34,33,32,29,30,31,1:28)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1335,7 +1367,12 @@ server<-function(input, output, session) {
   })
   
   
-  
+  output$plot.pois.asc<-renderPlot({
+    
+    plot(mydata.pois()$ras.pois)
+    plot(mydata.shp()$shp, add=TRUE)
+    
+  })
   output$plot.hunt.asc<-renderPlot({
     
     plot(mydata.hunt()$ras.hunt)
@@ -1436,8 +1473,15 @@ server<-function(input, output, session) {
   
   output$text_pois_a_cost<-renderText({
     ha<-mydata.shp()$ha    
+    pois.ha<-ha
+    if(input$pois_mask==1){
+      r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
+      pois.ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
+    }
     
-    pois.cost<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=input$pois.prop.a)
+    pois.cost<-pois.cost.func(a=input$pois.per.ha.a, b=pois.ha, c=100)#pois.prop.a)
+    
+    # pois.cost<-pois.cost.func(a=input$pois.per.ha.a, b=ha, c=100)#input$pois.prop.a)
     
     return(paste0("Cost = $", pois.cost ))
   })
@@ -1811,7 +1855,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   verbatimTextOutput("text_bait_a_cost")),
-                                              # text_bait_a_cost
+                                              
                                               
                                               
                                               tags$style(type="text/css", "#redtitle {color: black}")
@@ -1866,23 +1910,30 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               wellPanel(
                                                 
                                                 
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.start.a", label="Start day", value="60", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "pois.start.a", label="Start day", value="60", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.days.a", label="Operation length", value="5", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "pois.days.a", label="Operation length", value="5", width="150px"))),
+                                                # div(style="display:inline-block;vertical-align:top",
+                                                #     tags$div(title="help text ",
+                                                #              numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="50", width="120px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="50", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "pois.pkill.a", label="Percent kill", value="90", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.pkill.a", label="Percent kill given exposure", value="90", width="100px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
-                                                    tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=20, width="120px"))),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    verbatimTextOutput("text_pois_a_cost"))
+                                                             numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=20, width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
+                                                    verbatimTextOutput("text_pois_a_cost")),
+                                                div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="pois_mask", label="Aerial mask", value=FALSE)),
+                                                div(style="display:inline-block;vertical-align:top",conditionalPanel(
+                                                  condition="input.pois_mask==1",
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "pois_asc", label="Chose the aerial mask", accept=c(".asc"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.pois.asc", width = "450px", height="350px"))
+                                                ))
+                                                
                                                 
                                               )#End of wellpanel
                                             )#End of conditional panel 
