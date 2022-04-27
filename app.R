@@ -41,10 +41,11 @@ cols.eff<-brewer.pal(8,"Reds")
 proj4string <- "+proj=tmerc +lat_0=0.0 +lon_0=173.0 +k=0.9996 +x_0=1600000.0 +y_0=10000000.0 +datum=WGS84 +units=m"
 #4326 is the EPSG for WGS84...
 
-#~~~~~~~~~~~~~~~ A bunch o' functions ~~~~~~~~~~~~~~~~~~~~~~~~
+#~~~~~~~~~~~~~~~ A bunch of functions ~~~~~~~~~~~~~~~~~~~~~~~~
 #Define the resampling function
 resamp <- function(x,...){if(length(x)==1) x else sample(x,...)} 
 
+#~~~~~~~~~~~~~~~~COST FUNCTIONS~~~~~~~~~~~~~
 #Calculate the cost of trapping
 trap.cost.func<-function(a,b,c,d,e){
   #e.g. trap.cost.func(a=number of checks, b=n.traps, c=input$traps.per.day, d=input$day.rate,e=cost.per.trap)
@@ -148,11 +149,7 @@ make.trap.locs<-function(x.space,y.space,buff,shp){
 }
 
 
-# # Function to split the input boxes for scenarios - still needed?
-# split.str<-function(a){
-#   b<-as.numeric((strsplit(as.character(a),split= "/"))[[1]])
-#   return(b)
-# }
+
 #~~~~~~~~~~~~~~~~~  End functions ~~~~~~~~~~~~~~~~~~~~~~
 
 
@@ -327,12 +324,29 @@ server<-function(input, output, session) {
   })
   
   
+  # checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE),
+  #   condition="input.hunt_mask==1",
+  #   fileInput(inputId = "hunt_asc",
+  # 
+  
+  mydata.hunt<-reactive({
+    # ras.hunt<-ras.2
+    if(input$hunt_mask==1){
+      if(is.null(input$hunt_asc)==FALSE){
+      myraster<-input$hunt_asc$datapath
+      ras.hunt<-raster(myraster)
+
+    }}
+    return(list(ras.hunt=ras.hunt))
+  })
+  
+  
   #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
   mydata.shp<-reactive({
     
     #1. The default shape - Mahia Peninsula - defined at the very top
     shp<-readOGR("Shapefiles",def.shp)
-    
+    proj4string<-crs(shp)
     #2. 'Upload Shapefile, then read in all the components, 
     if(input$area_type=="Map"){
       if(is.null(input$shp.file)==FALSE){
@@ -342,7 +356,8 @@ server<-function(input, output, session) {
           file.rename(myshape[i,4], paste0(dir,"/",myshape[i,1]))
         }
         getshp <- list.files(dir, pattern="*.shp", full.names=TRUE)
-        shp<-readShapePoly(getshp,proj4string=CRS(proj4string))
+        # shp<-readShapePoly(getshp,proj4string=CRS(proj4string))
+        shp<-readOGR(getshp)
         # shp<-gBuffer(shp, width=1) #Fixes some issues with orphaned holes
       }
     }
@@ -901,12 +916,36 @@ server<-function(input, output, session) {
             if(is.na(hunt.start.a)==FALSE){
               if(t%in%hunt.period.a==TRUE){
 
+                if(input$hunt_mask==1){
+                  ras.hunt<-mydata.hunt()$ras.hunt
+                  cell.idx<-cellFromXY(ras.hunt,animals.xy[,1:2])
+                  # cell.idx
+                  cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
+                  # cell.hunt
+                  
+                  
+                  idx.target<-which(cell.idx%in%cell.hunt & animals.xy$Dead==0) #Which animals are targets...
+                  n.hunt<-rbinom(1,length(idx.target),prob=hunt.daily.pkill)#hunt.daily.pkill) #How many will be killed
+                  idx.kill<-sample(idx.target,n.hunt, replace=FALSE)     #Which ones will be killed
+                  # dead[idx.kill]<-1
+                  # animals.xy$Dead[idx.kill]<-1
+                  
+                }else{
+                
+                
                 alive<-which(animals.xy$Dead==0)
                 n.hunt<-rbinom(1,length(alive),prob=hunt.daily.pkill) #How many will be killed
                 idx.kill<-sample(alive,n.hunt, replace=FALSE)     #Which ones will be killed
+                }
                 # dead[idx.kill]<-1
                 animals.xy$Dead[idx.kill]<-1
+                
                 hunt.catch.vec[t]<-n.hunt
+                
+                
+                
+                
+                
               }}
             # hunt.catch.mat[ii,t]<-0
             
@@ -1295,6 +1334,14 @@ server<-function(input, output, session) {
     
   })
   
+  
+  
+  output$plot.hunt.asc<-renderPlot({
+    
+    plot(mydata.hunt()$ras.hunt)
+    plot(mydata.shp()$shp, add=TRUE)
+    
+  })
   
   
   output$plot.hunt<-renderPlot({
@@ -1785,21 +1832,28 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:middle",h5("Hunting Method 1")),p(),
                                                 div(style="display:inline-block;vertical-align:middle",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.start.a", label="Start day", value="30", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "hunt.start.a", label="Start day", value="30", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.days.a", label="Days hunted", value="10", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "hunt.days.a", label="Days hunted", value="10", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.effort.a", label="Distance hunted per day (m)", value="200", width="120px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "hunt.effort.a", label="Distance per day (m)", value="500", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.2", width="100px"))),
-                                                div(style="display:inline-block;vertical-align:middle",
+                                                             numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.5", width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=500, width="120px"))),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    verbatimTextOutput("text_hunt_a_cost"))
+                                                             numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=500, width="150px"))),
+                                                div(style="display:inline-block;vertical-align:top",
+                                                    verbatimTextOutput("text_hunt_a_cost")),
+                                                div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE)),
+                                                div(style="display:inline-block;vertical-align:top",conditionalPanel(
+                                                  condition="input.hunt_mask==1",
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "hunt_asc", label="Chose the hunting mask", accept=c(".asc"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
+                                                ))
+                                                
                                               )#End of wellpanel
                                             ),#End of conditional panel 
                                             
