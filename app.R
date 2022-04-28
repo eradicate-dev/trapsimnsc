@@ -31,7 +31,8 @@ library("DT")
 # setwd("C:\\Users\\gormleya\\OneDrive - MWLR\\Documents\\CAEM\\IslandConservation\\TrapSimFeasibility\\Shiny")
 
 # def.shp<-"Robinson_Coati"  #The default shape.
-def.shp<-"WhakatipuMahia"
+# def.shp<-"WhakatipuMahia"
+def.shp<-"AshleyForestVCZ"
 # shp.zones<-"Robinson_Coati_Workzones"
 ras.2<-raster("habitat_specific.asc")
 
@@ -180,6 +181,7 @@ server<-function(input, output, session) {
     # validate(
     #   need(input$trap_methods==TRUE | input$hunt_methods==TRUE,"You need at least trapping or hunting")
     # )
+    shp<-mydata.shp()$shp
     #~~~ Trapping ~~~
     x.space.a = NA
     y.space.a = NA
@@ -1211,7 +1213,7 @@ server<-function(input, output, session) {
   output$mymap<-renderLeaflet({
     shp<-mydata.shp()$shp
     # shp<-mydata.zone()$shp.2
-    
+      
     shp.proj<-spTransform(shp,CRS("+proj=longlat +datum=WGS84"))
     # ha<-mydata()$ha
     
@@ -1472,7 +1474,8 @@ server<-function(input, output, session) {
   })
   
   output$text_pois_a_cost<-renderText({
-    ha<-mydata.shp()$ha    
+    ha<-mydata.shp()$ha  
+    shp<-mydata.shp()$shp  
     pois.ha<-ha
     if(input$pois_mask==1){
       r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
@@ -1522,7 +1525,7 @@ output$text_density<-renderText({
 #         The user interface
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 ui<-fluidPage(theme=shinytheme("flatly"),
-              title="Pest Control",
+              title="EradSim",
               tags$head(
                 tags$style(HTML("
                                 .shiny-output-error-validation {
@@ -1569,7 +1572,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
                                                      # radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
-                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Default (Ashley Forest)"="RC","Upload Shapefile"="Map"), selected="RC"),
                                                      #   
                                                        conditionalPanel(
                                                          condition="input.area_type=='Area'",
