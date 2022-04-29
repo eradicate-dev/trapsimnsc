@@ -31,8 +31,8 @@ library("DT")
 # setwd("C:\\Users\\gormleya\\OneDrive - MWLR\\Documents\\CAEM\\IslandConservation\\TrapSimFeasibility\\Shiny")
 
 # def.shp<-"Robinson_Coati"  #The default shape.
-# def.shp<-"WhakatipuMahia"
-def.shp<-"AshleyForestVCZ"
+def.shp2<-"WhakatipuMahia"
+def.shp1<-"AshleyForestVCZ"
 # shp.zones<-"Robinson_Coati_Workzones"
 ras.2<-raster("habitat_specific.asc")
 
@@ -226,6 +226,7 @@ server<-function(input, output, session) {
     hunt.days.a = NA
     hunt.eff.a = NA
     hunt.rho.a = NA
+    hunt.mask = NA
     # hunt.start.b = NA 
     # hunt.days.b = NA
     # hunt.eff.b = NA
@@ -234,7 +235,11 @@ server<-function(input, output, session) {
       hunt.days.a = input$hunt.days.a
       hunt.eff.a = input$hunt.effort.a
       hunt.rho.a = input$hunt.rho.a
-    #   
+      
+      if(input$hunt_mask==1){ #Work out the poisoned area and save the file path to the raster that will be used.
+        hunt.mask = mydata.hunt()$myraster
+      }
+      
     #   if(input$show_hunt_b==1){
     #     # if(is.na(hunt.start.b)==FALSE){
     #     hunt.start.b = input$hunt.start.b
@@ -270,16 +275,17 @@ server<-function(input, output, session) {
     # pois.prop.a = NA
     pois.pkill.a = NA
     pois.area.a = NA
+    pois.mask = NA
     if(input$pois_methods==1){
       pois.start.a = input$pois.start.a
       pois.days.a = input$pois.days.a
       # pois.prop.a = input$pois.prop.a
       pois.pkill.a = input$pois.pkill.a
       pois.area.a = round(gArea(shp)/10000,0)
-      if(input$pois_mask==1){
+      if(input$pois_mask==1){ #Work out the poisoned area and save the file path to the raster that will be used.
         r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
         pois.area.a<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
-        
+        pois.mask = mydata.pois()$myraster
       }
       
     }
@@ -312,10 +318,12 @@ server<-function(input, output, session) {
       # pois.prop.a = pois.prop.a,
       pois.area.a = pois.area.a,
       pois.pkill.a = pois.pkill.a,
+      pois.mask=pois.mask,
       hunt.start.a = hunt.start.a,
       hunt.days.a = hunt.days.a,
       hunt.eff.a = hunt.eff.a,
-      hunt.rho.a = hunt.rho.a
+      hunt.rho.a = hunt.rho.a,
+      hunt.mask = hunt.mask
       # hunt.start.b = hunt.start.b,
       # hunt.days.b = hunt.days.b,
       # hunt.eff.b = hunt.eff.b
@@ -335,12 +343,8 @@ server<-function(input, output, session) {
   })
   
   
-  # checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE),
-  #   condition="input.hunt_mask==1",
-  #   fileInput(inputId = "hunt_asc",
-  # 
-  
-  #Read in the hunting mask
+
+  #Read in the hunting mask. And output the raster as well as the path to it.
   mydata.hunt<-reactive({
     # ras.hunt<-ras.2
     if(input$hunt_mask==1){
@@ -349,7 +353,7 @@ server<-function(input, output, session) {
       ras.hunt<-raster(myraster)
 
     }}
-    return(list(ras.hunt=ras.hunt))
+    return(list(ras.hunt=ras.hunt, myraster=myraster))
   })
   
   #Read in the aerial mask
@@ -359,19 +363,22 @@ server<-function(input, output, session) {
       if(is.null(input$pois_asc)==FALSE){
         myraster<-input$pois_asc$datapath
         ras.pois<-raster(myraster)
-        
       }}
-    return(list(ras.pois=ras.pois))
+    return(list(ras.pois=ras.pois, myraster=myraster))
   })
   
   #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
   mydata.shp<-reactive({
     
     #1. The default shape - Mahia Peninsula - defined at the very top
-    shp<-readOGR("Shapefiles",def.shp)
+    shp<-readOGR("Shapefiles",def.shp1)
     proj4string<-crs(shp)
+    if(input$area_type=="MP"){
+      shp<-readOGR("Shapefiles",def.shp2)
+    }
     #2. 'Upload Shapefile, then read in all the components, 
     if(input$area_type=="Map"){
+
       if(is.null(input$shp.file)==FALSE){
         myshape<-input$shp.file
         dir<-dirname(myshape[1,4])
@@ -401,20 +408,7 @@ server<-function(input, output, session) {
     return(list(shp=shp, p4s=proj4string, ha=ha))
   })
   
-  
-  # #Two hunting methods. Calculate the probability of kill based on k/rho and effort.
-  # #! Currently not used.
-  # mydata.hunt.prob<-reactive({
-  #   effort.zone<-c(input$effort.a, input$effort.b)
-  #   hunt.rho<-c(input$hunt.rho.a, input$hunt.rho.b)
-  #   hunt.k<-c(input$hunt.k.a, input$hunt.k.b)
-  #   theta.hat<-1-exp(-((hunt.rho*log(effort.zone))^hunt.k))
-  #   p.hunt.day<-theta.hat
-  #   
-  #   return(list(p.hunt.day=p.hunt.day))
-  #   
-  # })
-  
+
   
   
   # Make the traps and animals on the interactive map. Not linked to the actual simulation
@@ -521,12 +515,14 @@ server<-function(input, output, session) {
         hunt.days.a<-params$hunt.days.a[kk]
         hunt.eff.a<-params$hunt.eff.a[kk]
         hunt.rho.a<-params$hunt.rho.a[kk]
-        
+        hunt.mask<-params$hunt.mask[kk]
       
         pois.start.a<-params$pois.start.a[kk]
         pois.days.a<-params$pois.days.a[kk]
         # pois.prop.a<-params$pois.prop.a[kk]
         pois.pkill.a<-params$pois.pkill.a[kk]
+        pois.mask<-params$pois.mask[kk]
+        
         
         # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
         #for the traps and the bait stations
@@ -662,8 +658,11 @@ server<-function(input, output, session) {
         
         if(is.na(pois.start.a)==FALSE){
           pois.ha<-ha
-          if(input$pois_mask==1){
-            r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
+          # if(input$pois_mask==1){
+            if(is.na(pois.mask)==FALSE){
+              ras.pois<-raster(pois.mask)
+              r.tmp<-mask(disaggregate(ras.pois,100), shp)
+            # r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
             pois.ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
           }
           
@@ -930,8 +929,11 @@ server<-function(input, output, session) {
             if(is.na(pois.start.a)==FALSE){
               if(t%in%pois.period.a==TRUE){
                 
-                if(input$pois_mask==1){
-                  ras.pois<-mydata.pois()$ras.pois
+                # if(input$pois_mask==1){
+                  # ras.pois<-mydata.pois()$ras.pois
+                  if(is.na(pois.mask)==FALSE){
+                  ras.pois<-raster(pois.mask)
+                  
                   cell.idx<-cellFromXY(ras.pois,animals.xy[,1:2])
                   # cell.idx
                   cell.pois<-which(values(ras.pois)%in%1)  #which cells are hunting ones...?
@@ -953,12 +955,16 @@ server<-function(input, output, session) {
             if(is.na(hunt.start.a)==FALSE){
               if(t%in%hunt.period.a==TRUE){
 
-                if(input$hunt_mask==1){
-                  ras.hunt<-mydata.hunt()$ras.hunt
+                # if(input$hunt_mask==1){
+                  # ras.hunt<-mydata.hunt()$ras.hunt
+                  if(is.na(hunt.mask)==FALSE){
+                    ras.hunt<-raster(hunt.mask)
+                  
                   cell.idx<-cellFromXY(ras.hunt,animals.xy[,1:2])
-                  # cell.idx
                   cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
-                  # cell.hunt
+                  
+                  # cell.idx and cell.hunt from earlier
+                  
                   idx.target<-which(cell.idx%in%cell.hunt & animals.xy$Dead==0) #Which animals are targets...
                   n.hunt<-rbinom(1,length(idx.target),prob=hunt.daily.pkill)#hunt.daily.pkill) #How many will be killed
                   idx.kill<-sample(idx.target,n.hunt, replace=FALSE)     #Which ones will be killed
@@ -1201,7 +1207,9 @@ server<-function(input, output, session) {
     
     
     # params<-params[,c(25,24,22,23,1:21)]
-    params<-params[,c(35,34,33,30,31,32,1:29)]
+    # params<-params[,c(35,34,33,30,31,32,1:29)]
+    # params<-params[,c(36,35,31,32,33,34,1:30)]
+    params<-params[,c(37,36,32,33,34,35,1:31)]
     # params<-params[,c(34,33,32,29,30,31,1:28)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
@@ -1370,8 +1378,9 @@ server<-function(input, output, session) {
   
   
   output$plot.pois.asc<-renderPlot({
-    
-    plot(mydata.pois()$ras.pois)
+    ras.pois<-raster(mydata.pois()$myraster)
+    plot(ras.pois)
+    # plot(mydata.pois()$ras.pois)
     plot(mydata.shp()$shp, add=TRUE)
     
   })
@@ -1572,7 +1581,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
                                                      # radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
-                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Default (Ashley Forest)"="RC","Upload Shapefile"="Map"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Ashley Forest"="RC","Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="RC"),
                                                      #   
                                                        conditionalPanel(
                                                          condition="input.area_type=='Area'",
@@ -1897,7 +1906,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE)),
                                                 div(style="display:inline-block;vertical-align:top",conditionalPanel(
                                                   condition="input.hunt_mask==1",
-                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "hunt_asc", label="Chose the hunting mask", accept=c(".asc"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "hunt_asc", label="Chose the hunting mask", accept=c(".tif",".asc"), multiple=TRUE, width="200px")),
                                                   div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
                                                 ))
                                                 
@@ -1933,7 +1942,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="pois_mask", label="Aerial mask", value=FALSE)),
                                                 div(style="display:inline-block;vertical-align:top",conditionalPanel(
                                                   condition="input.pois_mask==1",
-                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "pois_asc", label="Chose the aerial mask", accept=c(".asc"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "pois_asc", label="Chose the aerial mask", accept=c(".asc",".tif"), multiple=TRUE, width="200px")),
                                                   div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.pois.asc", width = "450px", height="350px"))
                                                 ))
                                                 
