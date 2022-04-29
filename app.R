@@ -34,7 +34,7 @@ library("DT")
 def.shp2<-"WhakatipuMahia"
 def.shp1<-"AshleyForestVCZ"
 # shp.zones<-"Robinson_Coati_Workzones"
-ras.2<-raster("habitat_specific.asc")
+# ras.2<-raster("habitat_specific.asc")
 
 # cols.tst<-brewer.pal(6,"Blues")
 cols.vec<-brewer.pal(8,"Paired")
@@ -346,7 +346,6 @@ server<-function(input, output, session) {
 
   #Read in the hunting mask. And output the raster as well as the path to it.
   mydata.hunt<-reactive({
-    # ras.hunt<-ras.2
     if(input$hunt_mask==1){
       if(is.null(input$hunt_asc)==FALSE){
       myraster<-input$hunt_asc$datapath
@@ -358,13 +357,23 @@ server<-function(input, output, session) {
   
   #Read in the aerial mask
   mydata.pois<-reactive({
-    # ras.hunt<-ras.2
     if(input$pois_mask==1){
       if(is.null(input$pois_asc)==FALSE){
         myraster<-input$pois_asc$datapath
         ras.pois<-raster(myraster)
       }}
     return(list(ras.pois=ras.pois, myraster=myraster))
+  })
+  
+  
+  #Read in the habitat mask
+  mydata.habitat<-reactive({
+    if(input$ras_hab=='Hab'){
+      if(is.null(input$habitat_asc)==FALSE){
+        myraster<-input$habitat_asc$datapath
+        ras.habitat<-raster(myraster)
+      }}
+    return(list(ras.habitat=ras.habitat, myraster=myraster))
   })
   
   #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
@@ -423,7 +432,7 @@ server<-function(input, output, session) {
     n.poss<-input$numb.poss#.i
     #Temporary commented out.    
     # if(is.null(input$ras.1)==TRUE){
-    if((input$ras.1)=="Random"){
+    if((input$ras_hab)=="Ran"){
       #1. Random locations.
       n.poss.tmp<-(runifpoint(n.poss,shp))
       animals.xy.ini<-as.data.frame(n.poss.tmp)
@@ -432,6 +441,10 @@ server<-function(input, output, session) {
       # infile.ras <-input$ras.1
       # ras.2<-raster(infile.ras$datapath)
       #Call the function
+      validate(need(input$habitat_asc !="","Upload a habitat raster"))
+      # need(input$traps.x.space.a != "", "Please enter a value for the X trap spacing"),
+
+      ras.2<-raster(mydata.habitat()$myraster)
       animals.xy.ini<-get.pest.locs(ras.2, n.poss, shp)
     }
     colnames(animals.xy.ini)<-c("X","Y")
@@ -694,7 +707,7 @@ server<-function(input, output, session) {
           
           #~~~~~~~~~Make some animals~~~~~~~~~~
           # if(is.null(input$ras.1)==TRUE){
-          if((input$ras.1)=="Random"){
+          if((input$ras_hab)=="Ran"){
             #1. Random locations.
             n.poss.tmp<-(runifpoint(n.poss,shp))
             animals.xy<-as.data.frame(n.poss.tmp)
@@ -1050,7 +1063,7 @@ server<-function(input, output, session) {
                 #Make the new locations randomly...
                 
                 # if(is.null(input$ras.1)==TRUE){
-                if((input$ras.1)=="Random"){
+                if((input$ras_hab)=="Ran"){
                   
                   #1. Random locations.
                   
@@ -1209,7 +1222,8 @@ server<-function(input, output, session) {
     # params<-params[,c(25,24,22,23,1:21)]
     # params<-params[,c(35,34,33,30,31,32,1:29)]
     # params<-params[,c(36,35,31,32,33,34,1:30)]
-    params<-params[,c(37,36,32,33,34,35,1:31)]
+    # params<-params[,c(37,36,32,33,34,35,1:31)]
+    params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
     # params<-params[,c(34,33,32,29,30,31,1:28)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
@@ -1377,7 +1391,13 @@ server<-function(input, output, session) {
   })
   
   
+  #Plots of the asc maps
   output$plot.pois.asc<-renderPlot({
+    
+    validate(
+           need(input$pois_asc != "", "upload a tif or asc file to mask the hunting area"),
+    )
+      
     ras.pois<-raster(mydata.pois()$myraster)
     plot(ras.pois)
     # plot(mydata.pois()$ras.pois)
@@ -1386,7 +1406,12 @@ server<-function(input, output, session) {
   })
   output$plot.hunt.asc<-renderPlot({
     
-    plot(mydata.hunt()$ras.hunt)
+    validate(
+      need(input$hunt_asc != "", "Upload a tif or asc file to mask the hunting area"),
+    )
+    ras.hunt<-raster(mydata.hunt()$myraster)
+    plot(ras.hunt)
+    # plot(mydata.hunt()$ras.hunt)
     plot(mydata.shp()$shp, add=TRUE)
     
   })
@@ -1486,7 +1511,13 @@ server<-function(input, output, session) {
     ha<-mydata.shp()$ha  
     shp<-mydata.shp()$shp  
     pois.ha<-ha
+    
+
+    
     if(input$pois_mask==1){
+      validate(
+        need(input$pois_asc != "", "NA"),
+      )
       r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
       pois.ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
     }
@@ -1581,7 +1612,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      #       tags$div(title="'Specify-Size': specify a total size for a random square; 'Upload Shapefile': upload a shapefile of your study area",
                                                      #                
                                                      # radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula (Default)"="RC","Upload Shapefile"="Map", "Indicative Area"="Area"), selected="RC"),
-                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Ashley Forest"="RC","Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="RC"),
+                                                     # radioButtons(inputId="area_type", label="Chose area",choices=c("Ashley Forest"="RC","Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="RC"),
+                                                     radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="MP"),
                                                      #   
                                                        conditionalPanel(
                                                          condition="input.area_type=='Area'",
@@ -1604,9 +1636,20 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      ),
                                                      div(style="display:inline-block;vertical-align:top",
                                                          # fileInput(inputId = "ras.1", label="Ascii file of relative abundance", accept=c('.asc'), multiple=FALSE, width="250px")
-                                                         radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random","Habitat Specific"), selected="Random",width="250px")
+                                                         radioButtons(inputId = "ras_hab", label="Relative abundance", choices=c("Random"="Ran","Habitat Specific"="Hab"), selected="Ran",width="250px")
                                                          # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
                                                      ),
+                                                     
+
+                                                     div(style="display:inline-block;vertical-align:top",
+                                                         conditionalPanel(condition="input.ras_hab == 'Hab'",
+                                                                          div(style="display:inline-block;vertical-align:top", 
+                                                                              fileInput(inputId = "habitat_asc", label="Chose the habitat", accept=c(".tif",".asc"), multiple=FALSE, width="200px")),
+                                                                          # div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
+                                                         )),
+                                                     
+                                                     
+                                                     
                                                      div(style="display:inline-block;vertical-align:bottom",
                                                      verbatimTextOutput("text_density")),
                                                      tags$div(title="Sigma x 2.45 is the radius of a circle  where an indivudual spends 95% of its time.",
