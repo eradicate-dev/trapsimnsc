@@ -108,19 +108,17 @@ get.pest.locs<-function(ras, n.poss, shp){
   # }
   # coords<-as.data.frame(do.call("rbind", coords)) #Put them altogether from the list
   # 
-  buff<-n.poss/2
+  buff<-n.poss*5
   # Get the celll resolution
   res.x<-res(ras)[1]
   res.y<-res(ras)[1]
   
   df <- as.data.frame(ras, xy = T, na.rm = T)
-  sampled_cells <- sample(1:nrow(df), size = n.poss+buff, prob = df$habitat_specific, replace = T)
+  # sampled_cells <- sample(1:nrow(df), size = n.poss+buff, prob = df$habitat_specific, replace = T)
+  sampled_cells <- sample(1:nrow(df), size = n.poss+buff, prob = df[,3], replace = T)
   x.val<-df$x[(sampled_cells)]+res.x*(runif(n.poss+buff)-0.5)
   y.val<-df$y[(sampled_cells)]+res.y*(runif(n.poss+buff)-0.5)
   coords<-data.frame('x'=x.val, 'y'=y.val)
-
-  
-  
   coords<-coords[inside.owin(coords[,1], coords[,2], shp),]  #Remove the ones from outside the shapefile...
   coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
   
@@ -1416,7 +1414,21 @@ server<-function(input, output, session) {
     
   })
   
+  output$plot.habitat.asc<-renderPlot({
+    
+    validate(
+      need(input$habitat_asc != "", "Upload a tif or asc file of the relative abundance"),
+    )
+    ras.habitat<-raster(mydata.habitat()$myraster)
+    plot(ras.habitat)
+    # plot(mydata.hunt()$ras.hunt)
+    plot(mydata.shp()$shp, add=TRUE)
+    
+  })
   
+  
+  
+    
   output$plot.hunt<-renderPlot({
     eff<-seq(from=50, to=2000, by=50)
     theta.hat.a<-1-exp(-((input$hunt.rho.a*log(eff))^input$hunt.k.a))
@@ -1575,7 +1587,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               fluidRow(
                 column(width=4,  
                        h1("Eradication Feasibility Simulator"),
-                       "v1.02"
+                       "v1"
                        # checkboxInput("showinfo","Background information and instructions"),
 
                        # h3("Trapping Simulation Tool")
@@ -1645,6 +1657,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                          conditionalPanel(condition="input.ras_hab == 'Hab'",
                                                                           div(style="display:inline-block;vertical-align:top", 
                                                                               fileInput(inputId = "habitat_asc", label="Chose the habitat", accept=c(".tif",".asc"), multiple=FALSE, width="200px")),
+                                                                          div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.habitat.asc", width = "450px", height="350px"))
+                                                                          # plot.habitat.asc
                                                                           # div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
                                                          )),
                                                      
@@ -2085,7 +2099,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.03: March 2022"),
+              h6("v1.9.1: May 2022"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
               # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
@@ -2102,7 +2116,8 @@ shinyApp(ui=ui, server=server)
 #1.5.2 - outputs by zones as well. 
 #1.6 - removed zones - too fricking complicated, and got two methods of hunting and trapping in there. But no scenarios....
 #1.7.1 - scenarios are back! - with add and delete buttons.
-#1.01 - included aerial poisoning - and baiting and costs
+#1.8.1 - included aerial poisoning - and baiting and costs
+#1.9 - rasters of aerial and hunting masks can be read in.
 
 #Need to include bait costs...?
 #Group costs by labour and fixed costs...?
