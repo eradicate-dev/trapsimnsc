@@ -1237,24 +1237,32 @@ server<-function(input, output, session) {
   
   output$plot1<-renderPlot({
     #This is the plot of cost vs number left...First plot on Results tab
+    # validate(need(input$results.table_rows_selected !="","Select a results row"))
+    idx<-as.numeric(input$results.table_rows_selected)
+    
     res<-datab()$params
-    par(mar=c(4,4,1,1), mgp=c(2.5,1,0), tcl=-0.25)
-    plot(res$MeanPopSize, res$TotalCost, xlab="Final population", ylab="Total cost")
-    
-    
+    # par(mar=c(4,4,1,1), mgp=c(2.5,1,0), tcl=-0.25)
+    par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
+    plot(res$MeanPopSize, res$TotalCost, xlab="Final population", ylab="Total cost", type='n')
+    points(res$MeanPopSize, res$TotalCost, pch=21, bg=cols.vec[2], cex=1.5)    
+    points(res$MeanPopSize[idx], res$TotalCost[idx], pch=21, bg=cols.vec[6], cex=2)    
+    mtext("Total Cost vs Animals Remaining",3, cex=1.5, line=1)
   })
   
   
   
   output$plot2<-renderPlot({
+    validate(need(input$results.table_rows_selected !="","Select a results row from the table below"))
+    idx<-as.numeric(input$results.table_rows_selected)
+    
     trap.catch.list<-datab()$trap.catch.list
-    trap.catch.mat<-trap.catch.list[[as.numeric(input$result_scenario)]]
+    trap.catch.mat<-trap.catch.list[[idx]]
     bait.catch.list<-datab()$bait.catch.list
-    bait.catch.mat<-bait.catch.list[[as.numeric(input$result_scenario)]]
+    bait.catch.mat<-bait.catch.list[[idx]]
     pois.catch.list<-datab()$pois.catch.list
-    pois.catch.mat<-pois.catch.list[[as.numeric(input$result_scenario)]]
+    pois.catch.mat<-pois.catch.list[[idx]]
     hunt.catch.list<-datab()$hunt.catch.list
-    hunt.catch.mat<-hunt.catch.list[[as.numeric(input$result_scenario)]]
+    hunt.catch.mat<-hunt.catch.list[[idx]]
     
     nights.vec<-1:input$n.nights
     ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
@@ -1310,9 +1318,14 @@ server<-function(input, output, session) {
   
   
   output$plot4<-renderPlot({
+    validate(need(input$results.table_rows_selected !="","Select a results row"))
+    
+    idx<-as.numeric(input$results.table_rows_selected)
+    # idx<-as.numeric(input$result_scenario)
     
     pop.size.list<-datab()$pop.size.list
-    pop.size.mat<-pop.size.list[[as.numeric(input$result_scenario)]]
+    # pop.size.mat<-pop.size.list[[as.numeric(input$result_scenario)]]
+    pop.size.mat<-pop.size.list[[idx]]
     # pop.size.mat<-datab()$pop.size.mat
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
     plot(1,1,xlim=c(0,input$n.nights), ylim=c(0,max(pop.size.mat)), type='n', xlab="Nights", ylab="Population Size", las=1)
@@ -1326,6 +1339,7 @@ server<-function(input, output, session) {
     
   })
   
+  #This updates the dropdown box in the results section
   observe({
     # updateSelectInput(session=session, inputId="result_scenario",choices=mydata.scen()$params$Scenario)
     updateSelectInput(session=session, inputId="result_scenario",choices=rownames(scenParam()))
@@ -1502,11 +1516,14 @@ output$text_density<-renderText({
   
 
   #This contains the results 
-  output$results.table<-renderDataTable({
-    datab()$params
-  })
+  # output$results.table<-renderDataTable({
+  #   datab()$params
+  # })
   
-
+  output$results.table<-renderDataTable(
+    datab()$params, selection='single'
+  )
+  
   #This contains the scenarios on Tab 3: Run Scenarios
   output$tableDT <- DT::renderDataTable(
     scenParam()
@@ -1527,14 +1544,17 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 }
                                 "))),
               fluidRow(
-                column(width=4,  
+                column(width=6,  
                        h1("Eradication Feasibility Simulator"),
-                       "v1"
+                       strong("How much control?"),
+                       "This app is intended to provide guidance as to the approximate level of control required to achieve a desired level of pest reduction.",p(),
+                       
+                       # "v1"
                        # checkboxInput("showinfo","Background information and instructions"),
 
                        # h3("Trapping Simulation Tool")
                 ),
-                column(8,
+                column(6,
                        img(src="manaaki_logo.png", height = 90, align="right", hspace=20,vspace=10),
                        img(src="ciss_logo.jpg", height = 80, align="right", hspace=20,vspace=10),
                        # img(src="bhnsc.png", height = 80, align="right", hspace=20,vspace=10)
@@ -1545,14 +1565,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ),
               
               
-              fluidRow(
-                column(width=5,
-              h3("How much control?"),
-              "This simulation app is intended to provide guidance as to the approximate level of control required to achieve desired level of pest reduction.",
-              "It is based on an earlier tool called TrapSim which simulated trapping only.",
-              "For a background report on TrapSim, ",
-              tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),p()
-                )),              
+        
               
 
               fixedRow(
@@ -1675,8 +1688,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                        checkboxInput(inputId="pois_methods", label="Poisoning", value=FALSE)
                                                      )),
                                               column(width=1,
-                                                     wellPanel(
-                                                       actionButton("update", "Add Scenario"))
+                                                     # wellPanel(
+                                                       actionButton("update", "Add Scenario")
                                               )
                                             ),
                                             
@@ -1967,19 +1980,20 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                            numericInput(inputId = "n.its",label="Iterations", value=5, width="120px"))
                                                        
                                                      )),
-                                              column(width=1,
-                                                     wellPanel(
-                                                       tags$style(type="text/css", "textarea {width:100%}"),
-                                                       div(style="display:inline-block;vertical-align:bottom",
-                                                           actionButton("act.btn.trapsim","Run Simulations"))
-                                                       
-                                                     )
-                                              )
+                                              # column(width=1,
+                                              #        # wellPanel(
+                                              #          tags$style(type="text/css", "textarea {width:100%}"),
+                                              #          div(style="display:inline-block;vertical-align:bottom",
+                                              #              actionButton("act.btn.trapsim",strong("Run Simulations")))
+                                              #          
+                                              #        # )
+                                              # )
                                             ),
                                             
                                             # fluidRow(
                                             actionButton("deleteRows", strong("Delete Selected Rows")),
                                             actionButton("deleteAllRows", strong("Delete All Rows")),
+                                            actionButton("act.btn.trapsim",strong("Run Simulations")),
                                             p(),
                                             # ),
                                             
@@ -1991,9 +2005,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                    # ),
                                    tabPanel("4. Results",
                                             fluidRow(
-                                              column(width=2,
-                                                     selectInput("result_scenario","Choose Scenario to plot",choices=NULL),
-                                                     plotOutput(outputId = "plot1", width = "350px", height="300px")
+                                              column(width=3,
+                                                     # selectInput("result_scenario","Choose Scenario to plot",choices=NULL),
+                                                     plotOutput(outputId = "plot1", width = "400px", height="350px")
                                                      
                                               ),
                                               column(width=3,
@@ -2011,6 +2025,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             fluidRow(
                                               # column(width=6,
                                               dataTableOutput('results.table')
+                                              
                                               # uiOutput("scenario_dropdown")
                                               
                                             )
@@ -2020,6 +2035,10 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             fluidRow(
                                               column(width=12,
                                               h3("Instructions"),
+                                              "It is based on an earlier tool called TrapSim which simulated trapping only.",
+                                              "For a background report on TrapSim, ",
+                                              tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),
+                                              br(),
                                               "The app consist of 4 tabs:",br(),
                                               "1. Area and Pest Parameters",br(),"- Set the area (default is Mahia Peninsula, or upload a shapefile).",
                                               " Set the pest parameters: number of animals, home range size (specified as sigma), and reproductive rates (Rmax = growth, start day of breeding and length of breeding period) " ,br(),
