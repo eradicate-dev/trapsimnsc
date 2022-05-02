@@ -441,9 +441,10 @@ server<-function(input, output, session) {
       #Call the function
       validate(need(input$habitat_asc !="","Upload a habitat raster"))
       # need(input$traps.x.space.a != "", "Please enter a value for the X trap spacing"),
-
-      ras.2<-raster(mydata.habitat()$myraster)
-      animals.xy.ini<-get.pest.locs(ras.2, n.poss, shp)
+      ras.habitat<-raster(mydata.habitat()$myraster)
+      
+      # ras.2<-raster(mydata.habitat()$myraster)
+      animals.xy.ini<-get.pest.locs(ras.habitat, n.poss, shp)
     }
     colnames(animals.xy.ini)<-c("X","Y")
     
@@ -711,7 +712,9 @@ server<-function(input, output, session) {
             animals.xy<-as.data.frame(n.poss.tmp)
           }else{
             #2. Grid specific densities
-            animals.xy<-get.pest.locs(ras.2, n.poss, shp)
+            ras.habitat<-raster(mydata.habitat()$myraster)
+            
+            animals.xy<-get.pest.locs(ras.habitat, n.poss, shp)
           }
 
           colnames(animals.xy)<-c("X","Y")
@@ -1030,7 +1033,9 @@ server<-function(input, output, session) {
                   # infile.ras <-input$ras.1
                   # ras.2<-raster(infile.ras$datapath)
                   #Call the function
-                  new.animals.xy<-get.pest.locs(ras.2, N.new, shp)
+                  ras.habitat<-raster(mydata.habitat()$myraster)
+                  
+                  new.animals.xy<-get.pest.locs(ras.habitat, N.new, shp)
                 }
                 
                 # new.animals.xy<-as.data.frame(runifpoint(N.new,shp))
