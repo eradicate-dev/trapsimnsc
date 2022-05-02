@@ -975,63 +975,22 @@ server<-function(input, output, session) {
                   cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
                   
                   # cell.idx and cell.hunt from earlier
-                  
                   idx.target<-which(cell.idx%in%cell.hunt & animals.xy$Dead==0) #Which animals are targets...
                   n.hunt<-rbinom(1,length(idx.target),prob=hunt.daily.pkill)#hunt.daily.pkill) #How many will be killed
                   idx.kill<-sample(idx.target,n.hunt, replace=FALSE)     #Which ones will be killed
-
                 }else{
-                
                 
                 alive<-which(animals.xy$Dead==0)
                 n.hunt<-rbinom(1,length(alive),prob=hunt.daily.pkill) #How many will be killed
                 idx.kill<-sample(alive,n.hunt, replace=FALSE)     #Which ones will be killed
                 }
-                # dead[idx.kill]<-1
+
                 animals.xy$Dead[idx.kill]<-1
                 
                 hunt.catch.vec[t]<-n.hunt
-                
-                
-                
-                
-                
+
               }}
-            # hunt.catch.mat[ii,t]<-0
-            
-            # hunt.vec<-c(0,0)
-            # zones<-c("A","B","C","D")
-            
-            # zz<-ifelse(input$show_hunt_b==TRUE,2,1)
-            
-            
-            
-            # if(is.na(hunt.start.a)==FALSE){
-            #   zz<-ifelse(is.na(hunt.start.b)==TRUE,1,2)
-            #   for (z in 1:zz){
-            #     if(days.zone[z]>0){
-            #       if(t%in% hunt.periods[[z]] ){
-            #         # idx.animal.zone<-inside.owin(animals.xy[,1], animals.xy[,2], shp.2[shp.2$WorkZone=='C',])
-            #         # idx.animal.zone<-(inside.owin(as.data.frame(animals.xy)[,1], as.data.frame(animals.xy)[,2], shp.2[shp.2$WorkZone==zones[z],])&animals.xy$Dead==0)
-            #         # N.tmp<-sum(idx.animal.zone)
-            #         idx.animal<-(animals.xy$Dead==0)
-            #         N.tmp<-sum(idx.animal)
-            #         
-            #         if(N.tmp>0){
-            #           n.kill<-rbinom(n=1, p=p.hunt.day[z], size=N.tmp)
-            #           hunt.vec[z]<-n.kill
-            #           if(n.kill>0){
-            #             idx.dead<-sample(which(idx.animal,TRUE), size=n.kill, replace=FALSE) 
-            #             animals.xy$Dead[idx.dead]<-1
-            #           }
-            #         }
-            #       }
-            #     }
-            #   }
-            #   hunt.catch.mat[ii,t]<-sum(hunt.vec)
-            # }else{
-              # hunt.catch.mat[ii,t]<-0
-            # }
+
             
             #~~~~~~~~~~~~~~~~~~~~~Reproduction~~~~~~~~~~~~~~~~~~~~~~~~~
             #Get the reproductive vector when we hit the start of the interval...
@@ -1217,13 +1176,10 @@ server<-function(input, output, session) {
     
     
     
-    # params<-params[,c(25,24,22,23,1:21)]
-    # params<-params[,c(35,34,33,30,31,32,1:29)]
     # params<-params[,c(36,35,31,32,33,34,1:30)]
     # params<-params[,c(37,36,32,33,34,35,1:31)]
     params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
-    # params<-params[,c(34,33,32,29,30,31,1:28)]
-    
+
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
   )
@@ -1260,12 +1216,12 @@ server<-function(input, output, session) {
     map<-leafletProxy("mymap")
     map%>%clearMarkers()
     
-    map%>%addCircleMarkers(lng=traps.proj$x,lat=traps.proj$y, radius=3, color="black", weight=1, fill=TRUE, fillColor="red", fillOpacity=1, stroke=TRUE, group="Traps")
+    map%>%addCircleMarkers(lng=traps.proj$x,lat=traps.proj$y, radius=3, color="black", weight=1, fill=TRUE, fillColor="red", fillOpacity=1, stroke=TRUE, group="Devices")
     map%>%addCircleMarkers(lng=animals.xy$Lon,lat=animals.xy$Lat, radius=5, color="black", weight=1, fill=TRUE, fillColor=cols.vec[2], fillOpacity=1, stroke=TRUE, group="Animals")
     
     map%>%addLayersControl(
       baseGroups = c("Default","Topo","Aerial"),
-      overlayGroups=c("Traps","Animals"),
+      overlayGroups=c("Devices","Animals"),
       options = layersControlOptions(collapsed = FALSE)
     )
     
@@ -1275,7 +1231,7 @@ server<-function(input, output, session) {
   
   
   output$plot1<-renderPlot({
-    #This is the plot of cost vs number left...?
+    #This is the plot of cost vs number left...First plot on Results tab
     res<-datab()$params
     par(mar=c(4,4,1,1), mgp=c(2.5,1,0), tcl=-0.25)
     plot(res$MeanPopSize, res$TotalCost, xlab="Final population", ylab="Total cost")
@@ -1427,18 +1383,9 @@ server<-function(input, output, session) {
   })
   
   
+
   
-    
-  output$plot.hunt<-renderPlot({
-    eff<-seq(from=50, to=2000, by=50)
-    theta.hat.a<-1-exp(-((input$hunt.rho.a*log(eff))^input$hunt.k.a))
-    theta.hat.b<-1-exp(-((input$hunt.rho.b*log(eff))^input$hunt.k.b))
-    plot(eff, theta.hat.a, ylim=c(0,1), ylab="Pr.Kill",las=1, xlab="Distance (m)", type='l', col="blue", main="P.kill as a function of effort/day")
-    lines(eff, theta.hat.b, col="red")
-    legend("topleft", legend=c("Method 1","Method 2"), col=c(4,2), lty=1)
-  })
-  
-  
+  #Text on the indicative map
   output$text5<-renderText({
     traps<-mydata.map()$traps
     ntraps<-dim(traps)[1]
@@ -1471,14 +1418,14 @@ server<-function(input, output, session) {
     return(paste0("Max SD: ", round(max.sd,2)))
   })
   
-  
+  #Area in hectares on Tab 1
   output$text10<-renderText({
     ha<-mydata.shp()$ha
     return(paste0("Total area (ha): ", round(ha,0)))
   })
 
   
-  
+  #Cost of traps on the Control Methods tab
   output$text_trap_a_cost<-renderText({
     shp<-mydata.shp()$shp    
     traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)
@@ -1548,17 +1495,7 @@ output$text_density<-renderText({
   return(paste0(round(numb/ha,2)," per ha"))
 })
   
-  
-#Trivial change
-  # output$scenario_dropdown<-renderUI({
-  #   
-  #   params<-mydata.c()$params
-  #   
-  #   selectInput("result_scenario","Choose Scenario to plot",params$Scenario)
-  #   
-  # })
 
-  
   #This contains the results 
   output$results.table<-renderDataTable({
     datab()$params
