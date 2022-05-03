@@ -628,6 +628,16 @@ server<-function(input, output, session) {
           n.baits.a<-dim(baits.xy.a)[1]
         }
         
+        #Mask stuff for pois and hunting
+        if(is.na(pois.mask)==FALSE){
+          ras.pois<-raster(pois.mask)
+          cell.pois<-which(values(ras.pois)%in%1)  #which cells are poisoning ones...?
+        }
+        
+        if(is.na(hunt.mask)==FALSE){
+          ras.hunt<-raster(hunt.mask)
+          cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
+        }
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         
         #Carrying capacity for the area in terms of total number of animals - should be grid based?
@@ -946,11 +956,11 @@ server<-function(input, output, session) {
                 # if(input$pois_mask==1){
                   # ras.pois<-mydata.pois()$ras.pois
                   if(is.na(pois.mask)==FALSE){
-                  ras.pois<-raster(pois.mask)
+                  # ras.pois<-raster(pois.mask)  #Moved up earlier
                   
                   cell.idx<-cellFromXY(ras.pois,animals.xy[,1:2])
                   # cell.idx
-                  cell.pois<-which(values(ras.pois)%in%1)  #which cells are hunting ones...?
+                  # cell.pois<-which(values(ras.pois)%in%1)  #which cells are hunting ones...?
                   # cell.hunt
                   idx.target<-which(cell.idx%in%cell.pois & animals.xy$Dead==0) #Which animals are targets...
                   n.pois<-rbinom(1,length(idx.target),prob=pois.daily.pkill)#hunt.daily.pkill) #How many will be killed
@@ -972,10 +982,10 @@ server<-function(input, output, session) {
                 # if(input$hunt_mask==1){
                   # ras.hunt<-mydata.hunt()$ras.hunt
                   if(is.na(hunt.mask)==FALSE){
-                    ras.hunt<-raster(hunt.mask)
+                    # ras.hunt<-raster(hunt.mask)
                   
                   cell.idx<-cellFromXY(ras.hunt,animals.xy[,1:2])
-                  cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
+                  # cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
                   
                   # cell.idx and cell.hunt from earlier
                   idx.target<-which(cell.idx%in%cell.hunt & animals.xy$Dead==0) #Which animals are targets...
@@ -1526,7 +1536,7 @@ output$text_density<-renderText({
   
   #This contains the scenarios on Tab 3: Run Scenarios
   output$tableDT <- DT::renderDataTable(
-    scenParam()
+    scenParam()[c(1:7,15:31)]
   )
   
   
