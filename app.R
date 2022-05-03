@@ -31,8 +31,8 @@ library("DT")
 # setwd("C:\\Users\\gormleya\\OneDrive - MWLR\\Documents\\CAEM\\IslandConservation\\TrapSimFeasibility\\Shiny")
 
 # def.shp<-"Robinson_Coati"  #The default shape.
-def.shp2<-"WhakatipuMahia"
-def.shp1<-"AshleyForestVCZ"
+def.shp<-"WhakatipuMahia"
+# def.shp1<-"AshleyForestVCZ"
 # shp.zones<-"Robinson_Coati_Workzones"
 # ras.2<-raster("habitat_specific.asc")
 
@@ -120,7 +120,19 @@ get.pest.locs<-function(ras, n.poss, shp){
   y.val<-df$y[(sampled_cells)]+res.y*(runif(n.poss+buff)-0.5)
   coords<-data.frame('x'=x.val, 'y'=y.val)
   coords<-coords[inside.owin(coords[,1], coords[,2], shp),]  #Remove the ones from outside the shapefile...
-  coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
+  # coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
+  
+  
+  if(dim(coords)[1]>0){
+    coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
+  }else{
+    
+    validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
+    # coords<-""
+  }
+  
+  
+  
   
   return(coords)
   
@@ -179,6 +191,7 @@ server<-function(input, output, session) {
     # validate(
     #   need(input$trap_methods==TRUE | input$hunt_methods==TRUE,"You need at least trapping or hunting")
     # )
+    # validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
     shp<-mydata.shp()$shp
     #~~~ Trapping ~~~
     x.space.a = NA
@@ -332,9 +345,28 @@ server<-function(input, output, session) {
     
     #Test for duplicates and blank scenarios
     t<-scenParam()
-    t<-t[!duplicated(t), ]        #Dont add duplicates
-    t<-t[!rowSums(is.na(t))==dim(t)[2],]  #Dont add blank scenarios
+    if(sum(duplicated(t))==1){
+      t<-t[!duplicated(t), ]        #Dont add duplicates
+      showModal(modalDialog(
+        title = "Error","Duplicate scenario!",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("OK")
+      ))
+    }else if (sum(rowSums(is.na(t))==dim(t)[2])==1){
+      
+      t<-t[!rowSums(is.na(t))==dim(t)[2],]  #Dont add blank scenarios
+      showModal(modalDialog(
+        title = "Error","Blank scenario!",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("OK")
+      ))
+    }else{
+      showModal(modalDialog(
+        title = "EradSim","Scenario added.",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("OK")
+      ))
+    }
     scenParam(t)
+    
+
     
     # scenParam<-rbind(scenParam,to_add)
     return(list(scenParam=scenParam))
@@ -378,10 +410,10 @@ server<-function(input, output, session) {
   mydata.shp<-reactive({
     
     #1. The default shape - Mahia Peninsula - defined at the very top
-    shp<-readOGR("Shapefiles",def.shp1)
+    shp<-readOGR("Shapefiles",def.shp)
     proj4string<-crs(shp)
     if(input$area_type=="MP"){
-      shp<-readOGR("Shapefiles",def.shp2)
+      shp<-readOGR("Shapefiles",def.shp)
     }
     #2. 'Upload Shapefile, then read in all the components, 
     if(input$area_type=="Map"){
@@ -1220,6 +1252,7 @@ server<-function(input, output, session) {
   
   
   observe({
+    # validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
     traps<-mydata.map()$traps
     animals.xy<-mydata.map()$animals.xy.ini
     proj4string<-mydata.shp()$p4s
@@ -1400,7 +1433,7 @@ server<-function(input, output, session) {
   })
   
   output$plot.habitat.asc<-renderPlot({
-    
+    # validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
     validate(
       need(input$habitat_asc != "", "Upload a tif or asc file of the relative abundance"),
     )
@@ -2070,7 +2103,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.9.1: May 2022"),
+              h6("v1.9.2: May 2022"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
               # img(src="ciss_logo.jpg", height = 90, align="right", hspace=20,vspace=10)
@@ -2088,7 +2121,7 @@ shinyApp(ui=ui, server=server)
 #1.6 - removed zones - too fricking complicated, and got two methods of hunting and trapping in there. But no scenarios....
 #1.7.1 - scenarios are back! - with add and delete buttons.
 #1.8.1 - included aerial poisoning - and baiting and costs
-#1.9 - rasters of aerial and hunting masks can be read in.
+#1.9 - rasters of aerial and hunting masks can be read in. and tidy up results tab
 
 #Need to include bait costs...?
 #Group costs by labour and fixed costs...?
