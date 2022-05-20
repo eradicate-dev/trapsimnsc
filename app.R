@@ -27,6 +27,7 @@ library("proxy")
 library("sf")
 library("raster")
 library("DT")
+library("shinyvalidate")
 
 # setwd("C:\\Users\\gormleya\\OneDrive - MWLR\\Documents\\CAEM\\IslandConservation\\TrapSimFeasibility\\Shiny")
 
@@ -56,6 +57,19 @@ trap.cost.func<-function(a,b,c,d,e){
   # trap.cost<-as.integer((((b*checks)/c)*d)+(b*e))
   return(trap.cost)
 }
+# bait.cost.a
+
+#Cost of bait-stations
+bait.cost.func<-function(a,b,c,d,e,f){
+  #e.g. trap.cost.func(a=number of checks, b=n.traps, c=input$traps.per.day, d=input$day.rate, e=cost.per.trap, fbait cost per station per day)
+  fixed.cost<-b*e  #n.traps x cost.per.trap
+  bait.cost<-b*a*f
+  labor.cost<-ceiling(2*b/c)/2*a*d #- scales up to a half day, mostly works 
+  trap.cost<-as.integer(labor.cost+fixed.cost+bait.cost)
+  # trap.cost<-as.integer((((b*checks)/c)*d)+(b*e))
+  return(trap.cost)
+}
+
 
 #Calculate the cost of hunting
 hunt.cost.func<-function(a,b){
@@ -126,8 +140,13 @@ get.pest.locs<-function(ras, n.poss, shp){
   if(dim(coords)[1]>0){
     coords<-coords[sample(1:dim(coords)[1], size=n.poss, replace=FALSE),]  #Then sample to get the desired actual sample size
   }else{
+    showModal(modalDialog(
+      title = "Error","Raster and shapefile do not overlap.",easyClose = TRUE, fade=FALSE, size="s",
+      footer =  modalButton("OK")
+    ))
     
     validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
+    
     # coords<-""
   }
   
@@ -166,6 +185,13 @@ make.trap.locs<-function(x.space,y.space,buff,shp){
 
 server<-function(input, output, session) {
 
+  
+  iv <- InputValidator$new()
+  iv$add_rule("scenname", sv_required())
+  iv$add_rule("numb.poss", sv_required())
+  iv$enable()
+
+  
   #~~~~~~ Set up the scenarios
   scenParam <- reactiveVal()  #Can't recall why needed..
   
@@ -193,6 +219,18 @@ server<-function(input, output, session) {
     # )
     # validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
     shp<-mydata.shp()$shp
+    
+
+    
+    if(input$scenname==""){
+      showModal(modalDialog(
+        title = "Error","Add a scenario name",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("OK")
+      ))
+    }
+    
+    validate(need(!input$scenname=="", "Provide a scenario name"))
+    scen.name=input$scenname
     #~~~ Trapping ~~~
     x.space.a = NA
     y.space.a = NA
@@ -303,6 +341,7 @@ server<-function(input, output, session) {
         
     #Full scenario to add.
     to_add <- data.frame(
+      scen.name = scen.name,
       x.space.a = x.space.a,
       y.space.a = y.space.a,
       trap.start.a = trap.start.a,
@@ -345,24 +384,26 @@ server<-function(input, output, session) {
     
     #Test for duplicates and blank scenarios
     t<-scenParam()
-    if(sum(duplicated(t))==1){
-      t<-t[!duplicated(t), ]        #Dont add duplicates
+    if(sum(duplicated(t[,2:32]))==1){
+      t<-t[!duplicated(t[,2:32]), ]        #Dont add duplicates
       showModal(modalDialog(
-        title = "Error","Duplicate scenario!",easyClose = TRUE, fade=FALSE, size="s",
-        footer =  modalButton("OK")
+        title = "Error: Duplicate scenario!","This control scenario has already been added",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("Cancel", icon=icon("exclamation"))
       ))
-    }else if (sum(rowSums(is.na(t))==dim(t)[2])==1){
+    }else if (sum(rowSums(is.na(t))==dim(t)[2]-1)==1){
       
-      t<-t[!rowSums(is.na(t))==dim(t)[2],]  #Dont add blank scenarios
+      t<-t[!rowSums(is.na(t))==dim(t)[2]-1,]  #Dont add blank scenarios
       showModal(modalDialog(
-        title = "Error","Blank scenario!",easyClose = TRUE, fade=FALSE, size="s",
-        footer =  modalButton("OK")
+        title = "Error: Blank scenario!","No control methods were selected",easyClose = TRUE, fade=FALSE, size="s",
+        footer =  modalButton("Cancel", icon=icon("exclamation"))
       ))
     }else{
       showModal(modalDialog(
-        title = "EradSim","Scenario added.",easyClose = TRUE, fade=FALSE, size="s",
-        footer =  modalButton("OK")
+        title = "Success",paste0(input$scenname," added"),easyClose = TRUE, fade=TRUE, size="s",
+        footer =  modalButton("OK", icon=icon("smile"))
       ))
+      id<-dim((t))[1]+1
+      updateTextInput(session,"scenname", "Scenario name", value=sprintf("S%03d", id))
     }
     scenParam(t)
     
@@ -378,7 +419,8 @@ server<-function(input, output, session) {
   mydata.hunt<-reactive({
     if(input$hunt_mask==1){
       if(is.null(input$hunt_asc)==FALSE){
-      myraster<-input$hunt_asc$datapath
+      myraster<-input$hunt_asc$datapath   #basename for filename, dirname
+      # myraster<-input$hunt_asc$basename
       ras.hunt<-raster(myraster)
 
     }}
@@ -417,15 +459,22 @@ server<-function(input, output, session) {
     }
     #2. 'Upload Shapefile, then read in all the components, 
     if(input$area_type=="Map"){
-
+      
       if(is.null(input$shp.file)==FALSE){
         myshape<-input$shp.file
-        dir<-dirname(myshape[1,4])
-        for ( i in 1:nrow(myshape)) {
-          file.rename(myshape[i,4], paste0(dir,"/",myshape[i,1]))
-        }
+        
+        
+        if(nrow(myshape)==1){  #zipped files
+          dir<- dirname(myshape$datapath[1])
+          unzip(myshape$datapath, exdir = dir)
+        }else{
+          dir<-dirname(myshape[1,4])
+          for ( i in 1:nrow(myshape)) {
+            file.rename(myshape[i,4], paste0(dir,"/",myshape[i,1]))
+          }}
+        
+        
         getshp <- list.files(dir, pattern="*.shp", full.names=TRUE)
-        # shp<-readShapePoly(getshp,proj4string=CRS(proj4string))
         shp<-readOGR(getshp)
         # shp<-gBuffer(shp, width=1) #Fixes some issues with orphaned holes
       }
@@ -460,6 +509,11 @@ server<-function(input, output, session) {
     
     #Temporary pest animal coordinates...
     n.poss<-input$numb.poss#.i
+    if(is.na(n.poss)){
+      n.poss<-0
+    }
+
+
     #Temporary commented out.    
     # if(is.null(input$ras.1)==TRUE){
     if((input$ras_hab)=="Ran"){
@@ -505,7 +559,8 @@ server<-function(input, output, session) {
       need(input$n.nights != "", "Please enter a value for the number of Nights"),
       need(input$n.check.a != "", "Please enter a value for the Check interval"),
       need(input$p.bycatch.a != "", "Please enter a value for the Daily bycatch rate"),
-      need(input$max.catch.a != "", "Please enter a value for the prob of Max catch")
+      need(input$max.catch.a != "", "Please enter a value for the prob of Max catch"),
+      need(input$numb.poss != "", "Please enter a value for the number of animals ")
     )
 
     #Read in all the parameter values for the scenarios
@@ -601,7 +656,8 @@ server<-function(input, output, session) {
         
         if(is.na(hunt.start.a)==FALSE){
           hunt.period.a<-seq(from=hunt.start.a, to=(hunt.start.a+hunt.days.a-1), by=1)
-          Eff<-hunt.eff.a/mydata.shp()$ha
+          Eff<-hunt.eff.a/(mydata.shp()$ha/100)
+          
           # H<-log(Eff+1)
           hunt.daily.pkill<-1-exp(-(hunt.rho.a*Eff))
 
@@ -617,7 +673,8 @@ server<-function(input, output, session) {
         
         sigma.mean<-input$sigma.mean 
         sigma.sd<-input$sigma.sd
-        rmax.poss<-input$rmax.poss
+        # rmax.poss<-input$rmax.poss
+        ann.growth.poss<-input$ann.growth.poss
         K.poss<-10 #input$K.poss
         #When the reproductive period starts and how long it lasts (i.e. spread out over...)
         rep.start<-input$rep.start
@@ -676,7 +733,9 @@ server<-function(input, output, session) {
         K.tot<-K.poss*ha
         
         n.poss<-input$numb.poss #- should this be a parameter...? Or better to leave - maybe leave cause can re-run with same params.
-        
+        if(is.na(n.poss)){
+          n.poss<-0
+        }
         max.catch.a<-input$max.catch.a
         max.catch.b<-input$max.catch.b
         
@@ -700,7 +759,7 @@ server<-function(input, output, session) {
         if(is.na(bait.start.a)==FALSE){
           checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
           # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
-          bait.cost.sim<-trap.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)        
+          bait.cost.sim<-bait.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)        
           }
         
         
@@ -1042,7 +1101,8 @@ server<-function(input, output, session) {
             #If t is one of the start days of the breeding season...
             if(t%in%rep.start.vec){
               #Discrete version of rmax
-              rd<-exp(rmax.poss)-1
+              # rd<-exp(rmax.poss)-1
+              rd<-ann.growth.poss/100
               N0<-sum(animals.xy$Dead==0) #Current population
               K<-K.tot
               new.animals<-rd*N0*((K-N0)/K)#Number of new animals
@@ -1225,7 +1285,8 @@ server<-function(input, output, session) {
     
     # params<-params[,c(36,35,31,32,33,34,1:30)]
     # params<-params[,c(37,36,32,33,34,35,1:31)]
-    params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
+    # params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
+    params<-params[,c(1,38,37,33,34,35,36,2:8,16:32)]
 
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1242,8 +1303,10 @@ server<-function(input, output, session) {
     
     m<-leaflet() %>%
       addTiles(group="Default")%>%
-      addProviderTiles("Esri.WorldTopoMap", group = "Topo")%>%
+      # addProviderTiles("Esri.WorldTopoMap", group = "Topo")%>%
+      addProviderTiles("OpenTopoMap", group = "Topo")%>%
       addProviderTiles("Esri.WorldImagery", group = "Aerial")%>%
+      # addProviderTiles("Esri.WorldStreetMap", group = "Street")%>%
       addPolygons(data=shp.proj, weight=2, fillColor="grey40", color="black", fillOpacity=0.2)
     m
     
@@ -1407,6 +1470,21 @@ server<-function(input, output, session) {
   })
   
   
+output$plot_hunt<-renderPlot({  
+  hunt.eff<-seq(from=0.1,to=20, by=0.1)
+  ha<-mydata.shp()$ha
+  ha.km2<-ha/100
+  
+  Eff<-hunt.eff/ha.km2
+  hunt.daily.pkill<-1-exp(-(input$hunt.rho.a*Eff))
+  plot(hunt.eff, hunt.daily.pkill, xlab="Km per day", ylab="Prob. of daily kill", las=1)
+  abline(v=input$hunt.effort.a, col="red")
+})
+  
+  
+  
+  
+  
   #Plots of the asc maps
   output$plot.pois.asc<-renderPlot({
     
@@ -1453,14 +1531,16 @@ server<-function(input, output, session) {
     ntraps<-dim(traps)[1]
     ha.area<-mydata.shp()$ha
     
-    paste(ntraps, " Traps (One per ",round(ha.area/ntraps,1)," ha)", sep="")
+    paste(ntraps, " Traps (One per ",round(ha.area/ntraps,1)," hectare)", sep="")
   })
   
   
   output$text6<-renderText({
     hr.radius<-input$sigma.mean*2.45
     # ha.area<-input$area.ha
-    return(paste0("Home range size: ",round(((pi*hr.radius^2)/10000),2), " ha"))
+    hr.ha<-((pi*hr.radius^2)/10000)
+    hr.km<-hr.ha/100
+    return(paste0("Home range size: ",round(hr.ha,1), " hectares"))
   })
   
   
@@ -1518,7 +1598,7 @@ server<-function(input, output, session) {
     n.bait.a<-dim(bait.a)[1]
     # bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
     checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
-    cost<-trap.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+    cost<-bait.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)
     
     return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
   })
@@ -1552,7 +1632,9 @@ server<-function(input, output, session) {
   
 #The number of animals per hectare shown in Tab 1 under Pest Parameters  
 output$text_density<-renderText({
+  need(input$numb.poss != "", "Please enter a value for the number of animals ")
   ha<-mydata.shp()$ha
+  # numb<-200
   numb<-input$numb.poss
   return(paste0(round(numb/ha,2)," per ha"))
 })
@@ -1573,6 +1655,26 @@ output$text_density<-renderText({
   )
   
   
+  # https://shiny.rstudio.com/articles/generating-reports.html
+  
+  
+  output$report <- downloadHandler(
+    #Name of the report.
+    filename = function() {
+      paste("Results-", Sys.Date(), ".csv", sep="")
+    },
+    content = function(file) {
+      
+      data<-datab()$params
+      
+      write.csv(data, file)
+    }
+  )
+  
+  
+  
+  
+  
   
 }
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -1588,7 +1690,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 "))),
               fluidRow(
                 column(width=6,  
-                       h1("Eradication Feasibility Simulator"),
+                       h1("Eradication Feasibility"),
                        strong("How much control?"),
                        "This app is intended to provide guidance as to the approximate level of control required to achieve a desired level of pest reduction.",p(),
                        
@@ -1633,20 +1735,20 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      conditionalPanel(
                                                        condition="input.area_type=='Map'",
                                                        
-                                                       tags$div(title="Be sure to select all the components (.shp, .dbf etc)",
-                                                                fileInput(inputId = "shp.file", label="Chose the shapefile", accept=c('.shp','.dbf','.sbn','.sbx','.shx',".prj"), multiple=TRUE, width="200px")
+                                                       tags$div(title="Be sure to select all four components (.dbf, .prj, .shp, .shx), or upload a .zip file",
+                                                                fileInput(inputId = "shp.file", label="Select the shapefile (.zip or .dbf/.prj/.shp/.shx components)", accept=c('.shp','.dbf','.sbn','.sbx','.shx',".prj",".zip"), multiple=TRUE, width="300px")
                                                        )
                                                      ),
                                                      verbatimTextOutput("text10")
                                                    ),
                                                    h4("Pest parameters"),
                                                    wellPanel(
-                                                     div(style="display:inline-block;vertical-align:top",
+                                                     div(style="display:inline-block;vertical-align:top",title="Number of animals",
                                                          numericInput(inputId = "numb.poss", label="Number (total)", value=100, width="180px")
                                                      ),
-                                                     div(style="display:inline-block;vertical-align:top",
+                                                     div(style="display:inline-block;vertical-align:top",title="Pests distributed randomly or according to habitat (which requires reading in a raster of relative distribution)",
                                                          # fileInput(inputId = "ras.1", label="Ascii file of relative abundance", accept=c('.asc'), multiple=FALSE, width="250px")
-                                                         radioButtons(inputId = "ras_hab", label="Relative abundance", choices=c("Random"="Ran","Habitat Specific"="Hab"), selected="Ran",width="250px")
+                                                         radioButtons(inputId = "ras_hab", label="Pest distribution", choices=c("Random"="Ran","Habitat Specific"="Hab"), selected="Ran",width="250px")
                                                          # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
                                                      ),
                                                      
@@ -1654,7 +1756,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      div(style="display:inline-block;vertical-align:top",
                                                          conditionalPanel(condition="input.ras_hab == 'Hab'",
                                                                           div(style="display:inline-block;vertical-align:top", 
-                                                                              fileInput(inputId = "habitat_asc", label="Chose the habitat", accept=c(".tif",".asc"), multiple=FALSE, width="200px")),
+                                                                              fileInput(inputId = "habitat_asc", label="Upload a raster of habitat (.asc or .,tif)", accept=c(".tif",".asc"), multiple=FALSE, width="200px")),
                                                                           div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.habitat.asc", width = "450px", height="350px"))
                                                                           # plot.habitat.asc
                                                                           # div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
@@ -1665,9 +1767,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      div(style="display:inline-block;vertical-align:bottom",
                                                      verbatimTextOutput("text_density")),
                                                      tags$div(title="Sigma x 2.45 is the radius of a circle  where an indivudual spends 95% of its time.",
-                                                              h5(strong("Home range (sigma)"))),
-                                                     div(style="display:inline-block",
-                                                         numericInput(inputId = "sigma.mean", label="Mean", value=100, width="120px")),
+                                                              h5(strong("Home range (Sigma)"))),
+                                                     div(style="display:inline-block",title="Sigma x 5 is the diameter of the home range where an indivudual spends 95% of its time.",
+                                                         numericInput(inputId = "sigma.mean", label="Mean (metres)", value=100, width="120px")),
                                                      div(style="display:inline-block",
                                                          numericInput(inputId="sigma.sd", label='StdDev', value=5, width="120px")),
                                                      div(style="display:inline-block;vertical-align:bottom",
@@ -1682,8 +1784,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      
                                                      h5(strong("Reproductive parameters")),
                                                      div(style="display:inline-block",
-                                                         tags$div(title="This is the maximum rate of increase.",
-                                                                  numericInput(inputId = "rmax.poss", label="Rmax", value=0.4, width="120px")
+                                                         tags$div(title="This is the annual percentage increase of the population.",
+                                                                  # numericInput(inputId = "rmax.poss", label="Rmax", value=0.4, width="120px")
+                                                                  numericInput(inputId = "ann.growth.poss", label="Annual population growth (%)", value=20, width="120px", min=0, max=200)
                                                          )),
                                                      div(style="display:inline-block",
                                                          tags$div(title="This is the start day of the reproductive period (i.e. start of the birth pulse).",
@@ -1718,7 +1821,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             )
                                    ),
                                    tabPanel("2. Control Methods",
-
+                                            h4("Chose one or more control methods and then click Add Scenario to add it to the Run Scenarios"),
+                                            h4("Repeat this for all control scenarios you want to run"),
+                                            
                                             # h3("Choose 'Trapping' and/or 'Hunting' and then specify inputs for up to two methods of each. Click 'Add Scenario' to add them to the 'Run Scenarios' tab "),
                                             fluidRow(
                                               column(width=2,
@@ -1736,7 +1841,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               )
                                             ),
                                             
-                                            
+                                            h4("Scenario name"),
+                                            textInput(inputId = "scenname",label="", value="S001"),
                                             conditionalPanel(
                                               condition="input.trap_methods==1",
                                               
@@ -1752,18 +1858,18 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                              numericInput(inputId = "traps.y.space.a", label="Spacing N-S (m)", value="500",width="135px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Nightly probability of by-catch, false triggers etc  ",
-                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0.01, width="120px"))),
+                                                             numericInput(inputId = "p.bycatch.a", label="Daily bycatch", value=0.01, min=0.01, max=0.99, step=0.01, width="120px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(title="Maximum catch per trap  ",
                                                              numericInput(inputId = "max.catch.a", label="Max catch", value=1, width="135px"))),
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    numericInput(inputId = "g0.mean.a", label="Trap Probability (g0) Mean", value=0.1, width="120px")),
+                                                    numericInput(inputId = "g0.mean.a", label="Trap Probability (g0) Mean", value=0.1, min=0.01, max=0.99, step=0.01, width="120px")),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     numericInput(inputId="g0.sd.a", label='StdDev', value=.01, width="120px")),
                                                 # div(style="display:inline-block;vertical-align:bottom",
                                                 #     verbatimTextOutput("text8")),
                                                 div(style="display:inline-block;vertical-align:bottom",
-                                                    numericInput(inputId = "g0.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
+                                                    numericInput(inputId = "g0.zero.a", label="Proportion untrappable", value=0.05, min=0.01, max=0.99, step=0.01, width="120px")),
                                                 #Timings
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="Start night of trapping.",
@@ -1888,14 +1994,14 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               #              numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Nightly probability of station failure  ",
-                                                           numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, width="120px"))),
+                                                           numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, min=0.01, max=0.99, step=0.01, width="120px"))),
                                               
                                               div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId = "bait.g0.mean.a", label="Bait Sation Probability (g0) Mean", value=0.1, width="120px")),
+                                                  numericInput(inputId = "bait.g0.mean.a", label="Bait Sation Probability (g0) Mean", value=0.1, min=0.01, max=0.99, step=0.01, width="120px")),
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   numericInput(inputId="bait.g0.sd.a", label='StdDev', value=.01, width="120px")),
                                               div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId = "bait.g.zero.a", label="Proportion untrappable", value=0.05, width="120px")),
+                                                  numericInput(inputId = "bait.g.zero.a", label="Proportion unbaitable", value=0.05, min=0.01, max=0.99, step=0.01, width="120px")),
 
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(id="redtitle",title="Start night of baiting.",
@@ -1915,6 +2021,11 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                   tags$div(title="Labour cost - day rate ($)",
                                                            numericInput(inputId = "bait.day.rate.a", label="Day rate ($)", value=400, width="135px")
                                                   )),
+                                              div(style="display:inline-block;vertical-align:bottom",
+                                                  tags$div(title="Bait costs - per station per check ($)",
+                                                           numericInput(inputId = "bait.cost.a", label="Bait costs ($/station/day)", value=5, width="135px")
+                                                  )),
+                                              
                                               div(style="display:inline-block;vertical-align:bottom",
                                                   tags$div(title="Fixed cost ($) per bait station",
                                                            numericInput(inputId = "cost.per.bait.a", label="Fixed cost per bait station ($)", value=60, width="120px")
@@ -1949,21 +2060,28 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                              numericInput(inputId = "hunt.days.a", label="Days hunted", value="10", width="150px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.effort.a", label="Distance per day (m)", value="500", width="150px"))),
+                                                             numericInput(inputId = "hunt.effort.a", label="Distance per day (km)", value="5", width="150px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.5", width="150px"))),
+                                                             numericInput(inputId = "hunt.rho.a", label="Kill rate", value="0.5", min = 0.01, width="150px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=500, width="150px"))),
+                                                             numericInput(inputId = "day.rate.hunt.a", label="Day rate ($)", value=2500, width="150px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     verbatimTextOutput("text_hunt_a_cost")),
+                                                
+
+                                                
                                                 div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE)),
                                                 div(style="display:inline-block;vertical-align:top",conditionalPanel(
                                                   condition="input.hunt_mask==1",
                                                   div(style="display:inline-block;vertical-align:top", fileInput(inputId = "hunt_asc", label="Chose the hunting mask", accept=c(".tif",".asc"), multiple=TRUE, width="200px")),
                                                   div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.hunt.asc", width = "450px", height="350px"))
-                                                ))
+                                                )),br(),
+                                                div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="hunt_effort", label="Effort vs prob of kill", value=FALSE)),
+                                                div(style="display:inline-block;vertical-align:top",conditionalPanel(
+                                                  condition="input.hunt_effort==1",
+                                                  plotOutput(outputId = "plot_hunt",width = "450px", height="350px")))
                                                 
                                               )#End of wellpanel
                                             ),#End of conditional panel 
@@ -1988,7 +2106,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 #              numericInput(inputId = "pois.prop.a", label="Percentage of area poisoned", value="50", width="120px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
-                                                             numericInput(inputId = "pois.pkill.a", label="Percent kill", value="90", width="150px"))),
+                                                             numericInput(inputId = "pois.pkill.a", label="Percent kill", value="90", min=0, max=100, step=1, width="150px"))),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     tags$div(title="help text ",
                                                              numericInput(inputId = "pois.per.ha.a", label="Cost per hectare ($)", value=20, width="150px"))),
@@ -2011,7 +2129,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
 
                                    tabPanel("3. Run Scenarios",
                                             # tableOutput('scenarios.table'),
-                                            h3("Use this tab to check scenarios, and delete them if needed (click on the rows to delete), then click 'Run Simulations' to run the simulations."),
+                                            h4("Use this tab to check scenarios, and delete them if needed (click on the rows to delete)"), 
+                                            h4("When you are happy, click 'Run Simulations' to run the simulations."),
                                             fluidRow(
                                               column(width=2,
                                                      wellPanel(
@@ -2071,6 +2190,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                               # uiOutput("scenario_dropdown")
                                               
+                                            ),
+                                            fluidRow(
+                                              downloadButton("report", "Generate report") 
                                             )
                                             
                                    ),
@@ -2082,14 +2204,23 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               "For a background report on TrapSim, ",
                                               tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),
                                               br(),
-                                              "The app consist of 4 tabs:",br(),
-                                              "1. Area and Pest Parameters",br(),"- Set the area (default is Mahia Peninsula, or upload a shapefile).",
-                                              " Set the pest parameters: number of animals, home range size (specified as sigma), and reproductive rates (Rmax = growth, start day of breeding and length of breeding period) " ,br(),
-                                              "2. Control Methods",br(),"- Currently there are 3 control methods to chose from. Set a control scenario by one or more methods.",
+                                              "The purpose of the tool is to simulate various control scenarios in order to see which combination of methods is most likely to achieve eradication",
+                                              "The app consist of 4 tabs:",p(),
+                                              span("1. Area and Pest Parameters", style="color:blue"),br(),
+                                              span( "~  Area", style="color:red"),
+                                              "- Set the area (default is Mahia Peninsula, or upload a shapefile).","You can either upload all the shapefile components (.dbf,.prj,.shp & .shx), or upload a zip file which contains these components in a single file.", br(),
+                                              span( "~  Pest parameters", style="color:red"),
+                                              "- Set the number (and distribution) of animals, home range size (specified as sigma), and reproductive rates (annual growth rate, start day of breeding and length of breeding period) ", br(),
+                                              "- Animals will be either randomly located across the landscape, or according to habitat. If you select 'Habitat Specific', then you must upload a raster of habitat: .asc or .tif files are suitable.",
+                                              p(),
+                                              span("2. Control Methods",style="color:blue"),br(),
+                                              "- Currently there are 4 control methods to chose from - Trapping, Baitstations, Hunting and Aerial poisoning.",
+                                              " Set a control scenario by selecting one or more methods - you can model methods concurrently.",
                                               " There are various parameters for each relating to start deployment start day/length, spacing etc. Click 'Add Scenario' to add your control to the list of scenarios you wish to model. (These will appear in Tab 3). You can build up as many Control scenarios as you like.", br(),
-                                              "3. Run Sceanrios ",br(),"- When you have specified the set of control scenarios you wish to model, use this tab to check  the scenarios (you can delete one or all of them).",
-                                              " Enter the number of iterations for each and the simulation length in days. Click 'Run Simulation'", br(),
-                                              "4. Results ",br(),"- Explore the results  - graphs and tables of animals remaining, Total costs etc", br(),
+                                              " - Each scenario will be given an automatically generated name, however these can be changed ", strong("before"), " clicking the 'Add Scenario' button", p(),
+                                              span("3. Run Sceanrios ",style="color:blue"),br(),"- When you have specified the set of control scenarios you wish to model, use this tab to check  the scenarios (you can delete one or all of them).",
+                                              " Enter the number of iterations for each and the simulation length in days. Click 'Run Simulation'", p(),
+                                              span("4. Results ",style="color:blue"),br(),"- Explore the results  - graphs and tables of animals remaining, Total costs etc", br(),
                                               
                                               
                                               # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
