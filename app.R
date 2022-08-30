@@ -165,7 +165,7 @@ get.pest.locs<-function(ras, n.poss, shp){
 
 
 #  Make the trap locations from a x/y spacing, buffer and shapefile
-make.trap.locs<-function(x.space,y.space,buff,shp){
+make.trap.locs<-function(x.space,y.space,buff,shp, ras=NULL){
   
   b.box<-bbox(shp)
   
@@ -177,7 +177,12 @@ make.trap.locs<-function(x.space,y.space,buff,shp){
   shp.buff<-gBuffer(shp,width=-buff)   #Buffer in from the shapefuile edge
   #Remove traps that are outside the window,,,
   traps<-traps[inside.owin(traps[,1], traps[,2], shp.buff),]
-  
+  if(is.null(ras)){
+  }else{
+    cell.trap<-which(values(ras)%in%1)  #Which cells are in the raster mask
+    cell.idx<-cellFromXY(ras,traps) #which raster cells are the traps in...?
+    traps<-traps[which(cell.idx%in%cell.trap),]
+  }
   return(traps)
 }
 
@@ -217,14 +222,8 @@ server<-function(input, output, session) {
   
   #Code to add a scenario when the Add Scenario button is pressed
   observeEvent(input$update,{
-    # validate(
-    #   need(input$trap_methods==TRUE | input$hunt_methods==TRUE,"You need at least trapping or hunting")
-    # )
-    # validate(need(dim(coords)[1]>0,"Raster does not overlap with the shapefile"))
     shp<-mydata.shp()$shp
-    
 
-    
     if(input$scenname==""){
       showModal(modalDialog(
         title = "Error","Add a scenario name",easyClose = TRUE, fade=FALSE, size="s",
@@ -242,6 +241,8 @@ server<-function(input, output, session) {
     check.interval.a = NA
     g.mean.a=NA
     g.zero.a=NA    #This is the proportion that is untrappable, not g0....
+    trap.mask=NA
+    
     x.space.b = NA
     y.space.b = NA
     trap.start.b = NA
@@ -249,6 +250,7 @@ server<-function(input, output, session) {
     check.interval.b = NA
     g.mean.b=NA
     g.zero.b=NA
+    
     
     
     #Add the trap stuff
@@ -260,6 +262,12 @@ server<-function(input, output, session) {
       check.interval.a = input$n.check.a
       g.mean.a=input$g0.mean.a
       g.zero.a=input$g0.zero.a
+      
+      if(input$trap_mask==1){ #Work out the trapped area and save the file path to the raster that will be used.
+        trap.mask = mydata.trap()$myraster
+      }
+      
+      #For a second type of trapping....Might not be needed...
       if(input$show_trap_b==1){
         x.space.b = input$traps.x.space.b
         y.space.b = input$traps.y.space.b
@@ -279,29 +287,19 @@ server<-function(input, output, session) {
     hunt.eff.a = NA
     hunt.rho.a = NA
     hunt.mask = NA
-    # hunt.start.b = NA 
-    # hunt.days.b = NA
-    # hunt.eff.b = NA
     if(input$hunt_methods==1){
       hunt.start.a = input$hunt.start.a
       hunt.days.a = input$hunt.days.a
       hunt.eff.a = input$hunt.effort.a
       hunt.rho.a = input$hunt.rho.a
       
-      if(input$hunt_mask==1){ #Work out the poisoned area and save the file path to the raster that will be used.
+      if(input$hunt_mask==1){ #Work out the hunted area and save the file path to the raster that will be used.
         hunt.mask = mydata.hunt()$myraster
       }
       
-    #   if(input$show_hunt_b==1){
-    #     # if(is.na(hunt.start.b)==FALSE){
-    #     hunt.start.b = input$hunt.start.b
-    #     hunt.days.b = input$hunt.days.b
-    #     hunt.eff.b = input$effort.b 
-    #   }
     }
     
-    # 
-    
+
     #~~~ Bait Stations ~~~
     bait.start.a = NA
     bait.nights.a = NA
@@ -342,19 +340,19 @@ server<-function(input, output, session) {
       
     }
         
-    
+    #The letter codes used to help build up the 'Methods' part of the scenario names
     scen.code = ""
     if(input$trap_methods==1){
-      scen.code<-paste0(scen.code,"T")
+      scen.code<-paste0(scen.code,"T") #trapping
     }
     if(input$bait_methods==1){
-      scen.code<-paste0(scen.code,"B")
+      scen.code<-paste0(scen.code,"B") #baiting
     }
     if(input$hunt_methods==1){
-      scen.code<-paste0(scen.code,"H")
+      scen.code<-paste0(scen.code,"H") #hunting
     }
     if(input$pois_methods==1){
-      scen.code<-paste0(scen.code,"A")
+      scen.code<-paste0(scen.code,"A") #aerial toxin
     }
     
     
@@ -369,6 +367,7 @@ server<-function(input, output, session) {
       check.interval.a = check.interval.a,
       g.mean.a=g.mean.a,
       g.zero.a=g.zero.a,
+      trap.mask=trap.mask,
       x.space.b = x.space.b,
       y.space.b = y.space.b,
       trap.start.b = trap.start.b,
@@ -405,8 +404,8 @@ server<-function(input, output, session) {
     
     #Test for duplicates and blank scenarios
     t<-scenParam()
-    if(sum(duplicated(t[,2:32]))==1){
-      t<-t[!duplicated(t[,2:32]), ]        #Dont add duplicates
+    if(sum(duplicated(t[,2:33]))==1){
+      t<-t[!duplicated(t[,2:33]), ]        #Dont add duplicates
       showModal(modalDialog(
         title = "Error: Duplicate scenario!","This control scenario has already been added",easyClose = TRUE, fade=FALSE, size="s",
         footer =  modalButton("Cancel", icon=icon("exclamation"))
@@ -436,6 +435,18 @@ server<-function(input, output, session) {
   
   
 
+  #Read in the trapping mask. And output the raster as well as the path to it.
+  mydata.trap<-reactive({
+    if(input$trap_mask==1){
+      if(is.null(input$trap_asc)==FALSE){
+        myraster<-input$trap_asc$datapath   #basename for filename, dirname
+        # myraster<-input$hunt_asc$basename
+        ras.trap<-raster(myraster)
+        
+      }}
+    return(list(ras.trap=ras.trap, myraster=myraster))
+  })
+  
   #Read in the hunting mask. And output the raster as well as the path to it.
   mydata.hunt<-reactive({
     if(input$hunt_mask==1){
@@ -469,7 +480,8 @@ server<-function(input, output, session) {
     return(list(ras.habitat=ras.habitat, myraster=myraster))
   })
   
-  #Read in the shapefile - default has it loaded with Mahia (area_type=RC)
+  #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  #Read in the main shapefile - default has it loaded with Mahia (area_type=RC)
   mydata.shp<-reactive({
     
     #1. The default shape - Mahia Peninsula - defined at the very top
@@ -501,7 +513,7 @@ server<-function(input, output, session) {
       }
     }
     
-    #3. An indicative area
+    #3. An indicative area - currently not an option.
     if(input$area_type=="Area"){
       ha.tmp<-input$area.ha
       size<-sqrt(ha.tmp*10000)
@@ -610,6 +622,7 @@ server<-function(input, output, session) {
         buffer.a<-buffer
         g0.mean.a<-params$g.mean.a[kk]
         g.zero.a<-params$g.zero.a[kk]
+        trap.mask<-params$trap.mask[kk]
         
         #Traps 2 - why do we have two trap types...?
         trap.start.b<-params$trap.start.b[kk]
@@ -674,7 +687,12 @@ server<-function(input, output, session) {
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         #Make the trap & bait station locations 
         if(is.na(trap.start.a)==FALSE){
-          traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp)
+          if(is.na(trap.mask)==TRUE){
+            traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp)
+          }else{
+            traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp, ras=raster(trap.mask))            
+          }
+
           coordinates(traps.a) <- c( "X", "Y" )
           proj4string(traps.a) <- CRS(proj4string)
           traps.xy.a<-as.data.frame(traps.a)
@@ -1325,7 +1343,8 @@ server<-function(input, output, session) {
     # params<-params[,c(36,35,31,32,33,34,1:30)]
     # params<-params[,c(37,36,32,33,34,35,1:31)]
     # params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
-    params<-params[,c(1,33,39,38,34,35,36,37,2:8,16:32)]
+    # params<-params[,c(1,33,39,38,34,35,36,37,2:8,16:32)]
+    params<-params[,c(1,34,40,39,35,36,37,38,2:9,17:33)]
 
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1546,10 +1565,25 @@ output$plot_hunt<-renderPlot({
   
   
   #Plots of the asc maps
+output$plot.trap.asc<-renderPlot({
+  
+  validate(
+    need(input$trap_asc != "", "upload a tif or asc file to mask the trapping area"),
+  )
+  
+  ras.trap<-raster(mydata.trap()$myraster)
+  plot(ras.trap)
+  # plot(mydata.pois()$ras.pois)
+  plot(mydata.shp()$shp, add=TRUE)
+  
+})
+
+
+
   output$plot.pois.asc<-renderPlot({
     
     validate(
-           need(input$pois_asc != "", "upload a tif or asc file to mask the hunting area"),
+           need(input$pois_asc != "", "upload a tif or asc file to mask the aerial area"),
     )
       
     ras.pois<-raster(mydata.pois()$myraster)
@@ -1629,8 +1663,21 @@ output$plot_hunt<-renderPlot({
   
   #Cost of traps on the Control Methods tab
   output$text_trap_a_cost<-renderText({
+    
+    if(input$trap_mask==1){
+      validate(
+        need(input$trap_asc != "", "NA"),
+      )
+      trap.mask<-mydata.trap()$ras.trap
+      traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp, ras=(trap.mask))
+    }else{
+      traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)  
+    }
+    
+    
+    
     shp<-mydata.shp()$shp    
-    traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)
+    
     n.traps.a<-dim(traps.a)[1]
     # check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
     checks<-ceiling(input$trap.nights.a/input$n.check.a)+1  #The number of checks - copes with check intervals that dont fit nealy into the duration
@@ -1711,7 +1758,7 @@ output$text_density<-renderText({
   
   #This contains the scenarios on Tab 3: Run Scenarios
   output$tableDT <- DT::renderDataTable(
-    scenParam()[c(1,33,2:7,15:32)]
+    scenParam()[c(1,34,2:9,17:33)]
   )
   
   
@@ -1967,7 +2014,12 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     verbatimTextOutput("text_trap_a_cost")),
                                                 
-                                                
+                                                div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="trap_mask", label="Trapping mask", value=FALSE)),
+                                                div(style="display:inline-block;vertical-align:top",conditionalPanel(
+                                                  condition="input.trap_mask==1",
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "trap_asc", label="Chose the trapping mask", accept=c(".asc",".tif"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.trap.asc", width = "450px", height="350px"))
+                                                )),
                                                 
                                                 # div(style="display:inline-block;vertical-align:bottom",
                                                 #     checkboxInput(inputId = "show_g0",label="Show g0 dist.", value=FALSE)),
