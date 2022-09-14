@@ -31,6 +31,7 @@ library("DT")
 library("shinyvalidate")
 library("dplyr")
 library("shinycssloaders")
+# library("shinyalert")
 
 # setwd("C:\\Users\\gormleya\\OneDrive - MWLR\\Documents\\CAEM\\IslandConservation\\TrapSimFeasibility\\Shiny")
 
@@ -186,44 +187,73 @@ make.trap.locs<-function(x.space,y.space,buff,shp, ras=NULL){
   return(traps)
 }
 
-
-
+modal_confirm_2 <- modalDialog(
+  "Are you sure you want to continue?",
+  title = "This will delete all scenarios",
+  footer = tagList(
+    actionButton("ok_all_scen", "Delete", class = "btn btn-danger"),
+    actionButton("cancel", "Cancel")
+    
+  )
+)
+modal_confirm_1 <- modalDialog(
+  "Are you sure you want to continue?",
+  title = "This will delete selected scenarios",
+  footer = tagList(
+    actionButton("ok_sel_scen", "Delete", class = "btn btn-danger"),
+    actionButton("cancel", "Cancel")
+    
+  )
+)
 #~~~~~~~~~~~~~~~~~  End functions ~~~~~~~~~~~~~~~~~~~~~~
 
 
 server<-function(input, output, session) {
-
+  
   
   iv <- InputValidator$new()
   iv$add_rule("scenname", sv_required())
   iv$add_rule("numb.poss", sv_required())
   iv$enable()
-
+  
   
   #~~~~~~ Set up the scenarios
   scenParam <- reactiveVal()  #Can't recall why needed..
   
-  #Code to delete all scenarios when the Delete All Rows is pressed
+  #Event to delete all scenarios when the Delete All Rows is pressed
   observeEvent(input$deleteAllRows,{
+    showModal(modal_confirm_2)
+  })
+  observeEvent(input$ok_all_scen, {
     t<-scenParam()
     t <- t[-(1:dim(t)[1]),]
     scenParam(t)
+    removeModal()
   })
   
-  #Code to delete selected scenarios when Delete Selected Rows is pressed
+  #Event to delete selected scenarios when Delete Selected Rows is pressed
   observeEvent(input$deleteRows,{
+    showModal(modal_confirm_1)
+  })
+  observeEvent(input$ok_sel_scen, {
     t<-scenParam()
     if (!is.null(input$tableDT_rows_selected)) {
       t <- t[-as.numeric(input$tableDT_rows_selected),]
       rownames(t)<-1:dim(t)[1]
     }
     scenParam(t)
+    removeModal()
   })
+  #Close the modal - Cancel button is same for both
+  observeEvent(input$cancel, {
+    removeModal()
+  })
+ 
   
   #Code to add a scenario when the Add Scenario button is pressed
   observeEvent(input$update,{
     shp<-mydata.shp()$shp
-
+    
     if(input$scenname==""){
       showModal(modalDialog(
         title = "Error","Add a scenario name",easyClose = TRUE, fade=FALSE, size="s",
@@ -299,7 +329,7 @@ server<-function(input, output, session) {
       
     }
     
-
+    
     #~~~ Bait Stations ~~~
     bait.start.a = NA
     bait.nights.a = NA
@@ -317,7 +347,7 @@ server<-function(input, output, session) {
       bait.g.mean.a = input$bait.g0.mean.a
       bait.g.zero.a = input$bait.g.zero.a
     }
-
+    
     
     #~~~ Poisoning ~~~
     pois.start.a = NA
@@ -339,7 +369,7 @@ server<-function(input, output, session) {
       }
       
     }
-        
+    
     #The letter codes used to help build up the 'Methods' part of the scenario names
     scen.code = ""
     if(input$trap_methods==1){
@@ -410,31 +440,32 @@ server<-function(input, output, session) {
         title = "Error: Duplicate scenario!","This control scenario has already been added",easyClose = TRUE, fade=FALSE, size="s",
         footer =  modalButton("Cancel", icon=icon("exclamation"))
       ))
-    }else if (sum(rowSums(is.na(t))==dim(t)[2]-1)==1){
+    }else if (sum(rowSums(is.na(t))==dim(t)[2]-2)==1){
       
-      t<-t[!rowSums(is.na(t))==dim(t)[2]-1,]  #Dont add blank scenarios
+      t<-t[!rowSums(is.na(t))==dim(t)[2]-2,]  #Dont add blank scenarios
       showModal(modalDialog(
         title = "Error: Blank scenario!","No control methods were selected",easyClose = TRUE, fade=FALSE, size="s",
         footer =  modalButton("Cancel", icon=icon("exclamation"))
       ))
-    }else{
-      showModal(modalDialog(
-        title = "Success",paste0(input$scenname," added"),easyClose = TRUE, fade=TRUE, size="s",
-        footer =  modalButton("OK", icon=icon("smile"))
-      ))
+    }else{#Use a showNotification rather than a popup modal
+      # showModal(modalDialog(
+      #   title = "Success",paste0(input$scenname," added"),easyClose = TRUE, fade=TRUE, size="s",
+      #   footer =  modalButton("OK", icon=icon("smile"))
+      # ))
+      showNotification(paste0(input$scenname," added"), type="message")
       id<-dim((t))[1]+1
       updateTextInput(session,"scenname", "Scenario name", value=sprintf("S%03d", id))
     }
     scenParam(t)
     
-
+    
     
     # scenParam<-rbind(scenParam,to_add)
     return(list(scenParam=scenParam))
   })
   
   
-
+  
   #Read in the trapping mask. And output the raster as well as the path to it.
   mydata.trap<-reactive({
     if(input$trap_mask==1){
@@ -451,11 +482,11 @@ server<-function(input, output, session) {
   mydata.hunt<-reactive({
     if(input$hunt_mask==1){
       if(is.null(input$hunt_asc)==FALSE){
-      myraster<-input$hunt_asc$datapath   #basename for filename, dirname
-      # myraster<-input$hunt_asc$basename
-      ras.hunt<-raster(myraster)
-
-    }}
+        myraster<-input$hunt_asc$datapath   #basename for filename, dirname
+        # myraster<-input$hunt_asc$basename
+        ras.hunt<-raster(myraster)
+        
+      }}
     return(list(ras.hunt=ras.hunt, myraster=myraster))
   })
   
@@ -529,7 +560,7 @@ server<-function(input, output, session) {
     return(list(shp=shp, p4s=proj4string, ha=ha))
   })
   
-
+  
   
   
   # Make the traps and animals on the interactive map. Not linked to the actual simulation
@@ -545,8 +576,8 @@ server<-function(input, output, session) {
     if(is.na(n.poss)){
       n.poss<-0
     }
-
-
+    
+    
     #Temporary commented out.    
     # if(is.null(input$ras.1)==TRUE){
     if((input$ras_hab)=="Ran"){
@@ -595,7 +626,7 @@ server<-function(input, output, session) {
       need(input$max.catch.a != "", "Please enter a value for the prob of Max catch"),
       need(input$numb.poss != "", "Please enter a value for the number of animals ")
     )
-
+    
     #Read in all the parameter values for the scenarios
     params<-as.data.frame(scenParam())
     #Set up some places to store results 
@@ -649,7 +680,7 @@ server<-function(input, output, session) {
         hunt.eff.a<-params$hunt.eff.a[kk]
         hunt.rho.a<-params$hunt.rho.a[kk]
         hunt.mask<-params$hunt.mask[kk]
-      
+        
         pois.start.a<-params$pois.start.a[kk]
         pois.days.a<-params$pois.days.a[kk]
         # pois.prop.a<-params$pois.prop.a[kk]
@@ -660,7 +691,7 @@ server<-function(input, output, session) {
         
         #How long to run the simulation for.
         n.nights<-input$n.nights
-
+        
         #The g0 uncertainty, and sigma values for traps and bait. The sds are not in params - but should be!! 
         g0.sd.a<-input$g0.sd.a
         g0.sd.b<-input$g0.sd.b
@@ -685,7 +716,7 @@ server<-function(input, output, session) {
         # shp.2<-mydata.zone()$shp.2
         
         sim_type<-"individ"  #Would change this to input$sim_type if needed
-
+        
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         #Make the trap & bait station locations 
         if(is.na(trap.start.a)==FALSE){
@@ -694,7 +725,7 @@ server<-function(input, output, session) {
           }else{
             traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp, ras=raster(trap.mask))            
           }
-
+          
           coordinates(traps.a) <- c( "X", "Y" )
           proj4string(traps.a) <- CRS(proj4string)
           traps.xy.a<-as.data.frame(traps.a)
@@ -730,7 +761,7 @@ server<-function(input, output, session) {
           cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
         }
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-
+        
         
         # When we have traps//baits etc, then calculate the interval and the checking interval and bycatch/failure
         #for the traps and the bait stations
@@ -787,7 +818,7 @@ server<-function(input, output, session) {
         
         
         
-                
+        
         #Carrying capacity for the area in terms of total number of animals - should be grid based?
         K.tot<-K.poss*ha
         
@@ -819,21 +850,21 @@ server<-function(input, output, session) {
           checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
           # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
           bait.cost.sim<-bait.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)        
-          }
+        }
         
         
         
-          if(is.na(hunt.start.a)==FALSE){
-            hunt.cost.sim<-hunt.cost.func(a=input$day.rate.hunt.a, b=hunt.days.a)    
-          }
+        if(is.na(hunt.start.a)==FALSE){
+          hunt.cost.sim<-hunt.cost.func(a=input$day.rate.hunt.a, b=hunt.days.a)    
+        }
         
         
         if(is.na(pois.start.a)==FALSE){
           pois.ha<-ha
           # if(input$pois_mask==1){
-            if(is.na(pois.mask)==FALSE){
-              ras.pois<-raster(pois.mask)
-              r.tmp<-mask(disaggregate(ras.pois,100), shp)
+          if(is.na(pois.mask)==FALSE){
+            ras.pois<-raster(pois.mask)
+            r.tmp<-mask(disaggregate(ras.pois,100), shp)
             # r.tmp<-mask(disaggregate(mydata.pois()$ras.pois,100), shp)
             pois.ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
           }
@@ -876,7 +907,7 @@ server<-function(input, output, session) {
             
             animals.xy<-get.pest.locs(ras.habitat, n.poss, shp)
           }
-
+          
           colnames(animals.xy)<-c("X","Y")
           #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
           
@@ -891,10 +922,10 @@ server<-function(input, output, session) {
           #Calculate the g0 values...
           #g0 for traps
           if(is.na(trap.start.a)==FALSE){
-          alpbet.a<-get.alpha.beta(g0.mean.a, g0.sd.a)
-          animals.xy$g0.a<-rbeta(n.animals, alpbet.a$alpha, alpbet.a$beta)
-          animals.xy$g0.a[animals.xy$g0.a<0]<-0 #Probably not needed
-          animals.xy$g0.a[sample(x=n.animals,size=round(n.animals*g.zero.a),replace=F)]<-0  #Make some of the g0 values zero - untrappable animals...
+            alpbet.a<-get.alpha.beta(g0.mean.a, g0.sd.a)
+            animals.xy$g0.a<-rbeta(n.animals, alpbet.a$alpha, alpbet.a$beta)
+            animals.xy$g0.a[animals.xy$g0.a<0]<-0 #Probably not needed
+            animals.xy$g0.a[sample(x=n.animals,size=round(n.animals*g.zero.a),replace=F)]<-0  #Make some of the g0 values zero - untrappable animals...
           }else{
             animals.xy$g0.b<-0
           }
@@ -904,7 +935,7 @@ server<-function(input, output, session) {
             animals.xy$g0.b<-rbeta(n.animals, alpbet.b$alpha, alpbet.b$beta)
             animals.xy$g0.b[animals.xy$g0.b<0]<-0 #Probably not needed
             # if(is.na(g.zero.b)==FALSE){
-              animals.xy$g0.b[sample(x=n.animals,size=round(n.animals*g.zero.b),replace=F)]<-0
+            animals.xy$g0.b[sample(x=n.animals,size=round(n.animals*g.zero.b),replace=F)]<-0
             # }
           }else{
             animals.xy$g0.b<-0
@@ -985,7 +1016,7 @@ server<-function(input, output, session) {
             bait.catch.a<-matrix(0,n.baits.a,n.nights)  			#Trap.catch stores the captures in each trap each night
             # bait.remain.a<-rep(max.catch.b, n.traps.b)
           }
-
+          
           pois.catch.vec<-rep(0, n.nights)
           hunt.catch.vec<-rep(0, n.nights)
           # pop.size.zone.vec[[ii]]<-matrix(NA,nrow=4,ncol=n.nights+1)
@@ -1081,7 +1112,7 @@ server<-function(input, output, session) {
             
             if(is.na(bait.start.a)==FALSE){
               if(t%in%bait.period.a==TRUE){
-
+                
                 if(sum(not.caught)>0){
                   for (j in not.caught){ 							#For each animal not already caught
                     
@@ -1104,8 +1135,8 @@ server<-function(input, output, session) {
               if(t%in%pois.period.a==TRUE){
                 
                 # if(input$pois_mask==1){
-                  # ras.pois<-mydata.pois()$ras.pois
-                  if(is.na(pois.mask)==FALSE){
+                # ras.pois<-mydata.pois()$ras.pois
+                if(is.na(pois.mask)==FALSE){
                   # ras.pois<-raster(pois.mask)  #Moved up earlier
                   
                   cell.idx<-cellFromXY(ras.pois,animals.xy[,1:2])
@@ -1117,9 +1148,9 @@ server<-function(input, output, session) {
                   idx.kill<-sample(idx.target,n.pois, replace=FALSE)     #Which ones will be killed
                   
                 }else{
-                alive<-which(animals.xy$Dead==0)
-                n.pois<-rbinom(1,length(alive),prob=pois.daily.pkill) #How many will be killed
-                idx.kill<-sample(alive,n.pois, replace=FALSE)     #Which ones will be killed
+                  alive<-which(animals.xy$Dead==0)
+                  n.pois<-rbinom(1,length(alive),prob=pois.daily.pkill) #How many will be killed
+                  idx.kill<-sample(alive,n.pois, replace=FALSE)     #Which ones will be killed
                 }
                 animals.xy$Dead[idx.kill]<-1
                 pois.catch.vec[t]<-n.pois
@@ -1128,11 +1159,11 @@ server<-function(input, output, session) {
             #Hunting
             if(is.na(hunt.start.a)==FALSE){
               if(t%in%hunt.period.a==TRUE){
-
+                
                 # if(input$hunt_mask==1){
-                  # ras.hunt<-mydata.hunt()$ras.hunt
-                  if(is.na(hunt.mask)==FALSE){
-                    # ras.hunt<-raster(hunt.mask)
+                # ras.hunt<-mydata.hunt()$ras.hunt
+                if(is.na(hunt.mask)==FALSE){
+                  # ras.hunt<-raster(hunt.mask)
                   
                   cell.idx<-cellFromXY(ras.hunt,animals.xy[,1:2])
                   # cell.hunt<-which(values(ras.hunt)%in%1)  #which cells are hunting ones...?
@@ -1142,18 +1173,18 @@ server<-function(input, output, session) {
                   n.hunt<-rbinom(1,length(idx.target),prob=hunt.daily.pkill)#hunt.daily.pkill) #How many will be killed
                   idx.kill<-sample(idx.target,n.hunt, replace=FALSE)     #Which ones will be killed
                 }else{
-                
-                alive<-which(animals.xy$Dead==0)
-                n.hunt<-rbinom(1,length(alive),prob=hunt.daily.pkill) #How many will be killed
-                idx.kill<-sample(alive,n.hunt, replace=FALSE)     #Which ones will be killed
+                  
+                  alive<-which(animals.xy$Dead==0)
+                  n.hunt<-rbinom(1,length(alive),prob=hunt.daily.pkill) #How many will be killed
+                  idx.kill<-sample(alive,n.hunt, replace=FALSE)     #Which ones will be killed
                 }
-
+                
                 animals.xy$Dead[idx.kill]<-1
                 
                 hunt.catch.vec[t]<-n.hunt
-
+                
               }}
-
+            
             
             #~~~~~~~~~~~~~~~~~~~~~Reproduction~~~~~~~~~~~~~~~~~~~~~~~~~
             #Get the reproductive vector when we hit the start of the interval...
@@ -1347,7 +1378,7 @@ server<-function(input, output, session) {
     # params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
     # params<-params[,c(1,33,39,38,34,35,36,37,2:8,16:32)]
     params<-params[,c(1,34,40,39,35,36,37,38,2:9,17:33)]
-
+    
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
   )
@@ -1357,7 +1388,7 @@ server<-function(input, output, session) {
   output$mymap<-renderLeaflet({
     shp<-mydata.shp()$shp
     # shp<-mydata.zone()$shp.2
-      
+    
     shp.proj<-spTransform(shp,CRS("+proj=longlat +datum=WGS84"))
     # ha<-mydata()$ha
     
@@ -1450,13 +1481,13 @@ server<-function(input, output, session) {
     
     lines(nights.vec,cumsum(colMeans(bait.catch.mat)), col=cols.vec[4])
     points(nights.vec,cumsum(colMeans(bait.catch.mat)), bg=cols.vec[4], pch=22)
-
+    
     lines(nights.vec,cumsum(colMeans(pois.catch.mat)), col=cols.vec[6])
     points(nights.vec,cumsum(colMeans(pois.catch.mat)), bg=cols.vec[6], pch=23)
     
     lines(nights.vec,cumsum(colMeans(hunt.catch.mat)), col=cols.vec[8])
     points(nights.vec,cumsum(colMeans(hunt.catch.mat)), bg=cols.vec[8], pch=24)
-
+    
     legend("topleft", legend=c("Traps","Bait station","Aerial poison", "Hunting"), pch=c(21,22,23, 24), pt.bg=cols.vec[c(2,4,6,8)], bty="n")
     mtext("Cumulative kills",3, cex=1.5, line=1)
     # mtext("Trapped per night",3, cex=1.5, line=1)
@@ -1530,64 +1561,64 @@ server<-function(input, output, session) {
   })
   
   
-output$plot_hunt<-renderPlot({  
-  
-  
-  hunt.eff<-seq(from=0.1,to=20, by=0.1)
-  
-  # ha.hunt<-mydata.shp()$hunt.area.a
-  #Calculate the Effort - i.e. the distance /area to be hunted
-  if(input$hunt_mask==1){
-    validate(need(input$hunt_asc != "", "Upload a tif or asc file to mask the hunting area"),)
-    shp<-mydata.shp()$shp
-    r.tmp<-mask(disaggregate(mydata.hunt()$ras.hunt,100), shp)
-    ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
-  }else{
-    ha<-mydata.shp()$ha  
-  }
-  
-  
-  
-  
-  ha.km2<-ha/100
-  
-  Eff<-hunt.eff/ha.km2
-  hunt.daily.pkill<-1-exp(-(input$hunt.rho.a*Eff))
-  plot(hunt.eff, hunt.daily.pkill, xlab="Km per day", ylab="Prob. of daily kill", las=1)
-  abline(v=input$hunt.effort.a, col="red")
-  
-  
-  abline(h=hunt.daily.pkill[match(input$hunt.effort.a,hunt.eff)], col="blue")
-  mtext(round(ha,0),3, line=1)
-  # mtext(hunt.ha,3, line=2)
-})
+  output$plot_hunt<-renderPlot({  
+    
+    
+    hunt.eff<-seq(from=0.1,to=20, by=0.1)
+    
+    # ha.hunt<-mydata.shp()$hunt.area.a
+    #Calculate the Effort - i.e. the distance /area to be hunted
+    if(input$hunt_mask==1){
+      validate(need(input$hunt_asc != "", "Upload a tif or asc file to mask the hunting area"),)
+      shp<-mydata.shp()$shp
+      r.tmp<-mask(disaggregate(mydata.hunt()$ras.hunt,100), shp)
+      ha<-sum(values(r.tmp), na.rm=TRUE)*prod(res(r.tmp))/10000
+    }else{
+      ha<-mydata.shp()$ha  
+    }
+    
+    
+    
+    
+    ha.km2<-ha/100
+    
+    Eff<-hunt.eff/ha.km2
+    hunt.daily.pkill<-1-exp(-(input$hunt.rho.a*Eff))
+    plot(hunt.eff, hunt.daily.pkill, xlab="Km per day", ylab="Prob. of daily kill", las=1)
+    abline(v=input$hunt.effort.a, col="red")
+    
+    
+    abline(h=hunt.daily.pkill[match(input$hunt.effort.a,hunt.eff)], col="blue")
+    mtext(round(ha,0),3, line=1)
+    # mtext(hunt.ha,3, line=2)
+  })
   
   
   
   
   
   #Plots of the asc maps
-output$plot.trap.asc<-renderPlot({
+  output$plot.trap.asc<-renderPlot({
+    
+    validate(
+      need(input$trap_asc != "", "upload a tif or asc file to mask the trapping area"),
+    )
+    
+    ras.trap<-raster(mydata.trap()$myraster)
+    plot(ras.trap)
+    # plot(mydata.pois()$ras.pois)
+    plot(mydata.shp()$shp, add=TRUE)
+    
+  })
   
-  validate(
-    need(input$trap_asc != "", "upload a tif or asc file to mask the trapping area"),
-  )
   
-  ras.trap<-raster(mydata.trap()$myraster)
-  plot(ras.trap)
-  # plot(mydata.pois()$ras.pois)
-  plot(mydata.shp()$shp, add=TRUE)
   
-})
-
-
-
   output$plot.pois.asc<-renderPlot({
     
     validate(
-           need(input$pois_asc != "", "upload a tif or asc file to mask the aerial area"),
+      need(input$pois_asc != "", "upload a tif or asc file to mask the aerial area"),
     )
-      
+    
     ras.pois<-raster(mydata.pois()$myraster)
     plot(ras.pois)
     # plot(mydata.pois()$ras.pois)
@@ -1619,7 +1650,7 @@ output$plot.trap.asc<-renderPlot({
   })
   
   
-
+  
   
   #Text on the indicative map
   output$text5<-renderText({
@@ -1661,7 +1692,7 @@ output$plot.trap.asc<-renderPlot({
     ha<-mydata.shp()$ha
     return(paste0("Total area (ha): ", round(ha,0)))
   })
-
+  
   
   #Cost of traps on the Control Methods tab
   output$text_trap_a_cost<-renderText({
@@ -1675,7 +1706,7 @@ output$plot.trap.asc<-renderPlot({
     }else{
       traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)  
     }
-
+    
     n.traps.a<-dim(traps.a)[1]
     # check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
     checks<-ceiling(input$trap.nights.a/input$n.check.a)+1  #The number of checks - copes with check intervals that dont fit nealy into the duration
@@ -1683,7 +1714,7 @@ output$plot.trap.asc<-renderPlot({
     
     return(paste0(n.traps.a," Traps\nCost = $", cost ))
   })
-
+  
   output$text_trap_b_cost<-renderText({
     shp<-mydata.shp()$shp    
     traps.b<-make.trap.locs(input$traps.x.space.b, input$traps.y.space.b, 100, shp)
@@ -1694,7 +1725,7 @@ output$plot.trap.asc<-renderPlot({
     
     return(paste0(n.traps.b," Traps\nCost = $", cost ))
   })
-    
+  
   
   
   output$text_bait_a_cost<-renderText({
@@ -1718,7 +1749,7 @@ output$plot.trap.asc<-renderPlot({
     shp<-mydata.shp()$shp  
     pois.ha<-ha
     
-
+    
     
     if(input$pois_mask==1){
       validate(
@@ -1735,16 +1766,16 @@ output$plot.trap.asc<-renderPlot({
     return(paste0("Cost = $", pois.cost ))
   })
   
-#The number of animals per hectare shown in Tab 1 under Pest Parameters  
-output$text_density<-renderText({
-  need(input$numb.poss != "", "Please enter a value for the number of animals ")
-  ha<-mydata.shp()$ha
-  # numb<-200
-  numb<-input$numb.poss
-  return(paste0(round(numb/ha,2)," per ha"))
-})
+  #The number of animals per hectare shown in Tab 1 under Pest Parameters  
+  output$text_density<-renderText({
+    need(input$numb.poss != "", "Please enter a value for the number of animals ")
+    ha<-mydata.shp()$ha
+    # numb<-200
+    numb<-input$numb.poss
+    return(paste0(round(numb/ha,2)," per ha"))
+  })
   
-
+  
   #This contains the results 
   # output$results.table<-renderDataTable({
   #   datab()$params
@@ -1801,7 +1832,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                        
                        # "v1"
                        # checkboxInput("showinfo","Background information and instructions"),
-
+                       
                        # h3("Trapping Simulation Tool")
                 ),
                 column(6,
@@ -1809,15 +1840,15 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                        img(src="ciss_logo.jpg", height = 80, align="right", hspace=20,vspace=10),
                        # img(src="bhnsc.png", height = 80, align="right", hspace=20,vspace=10)
                        img(src="ari_logo.jpg", height = 80, align="right", hspace=20,vspace=10)
-
+                       
                        # img(src="IC_logo.png", height = 90, align="right", hspace=20,vspace=10)
                 )
               ),
               
               
-        
               
-
+              
+              
               fixedRow(
                 column(width=12,
                        tabsetPanel(id="inTabset",
@@ -1832,10 +1863,10 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      # radioButtons(inputId="area_type", label="Chose area",choices=c("Ashley Forest"="RC","Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="RC"),
                                                      radioButtons(inputId="area_type", label="Chose area",choices=c("Mahia Peninsula"="MP","Upload Shapefile"="Map"), selected="MP"),
                                                      #   
-                                                       conditionalPanel(
-                                                         condition="input.area_type=='Area'",
-                                                         numericInput(inputId = "area.ha", label="Area (ha)", value=10000, width="120px")
-                                                       ),
+                                                     conditionalPanel(
+                                                       condition="input.area_type=='Area'",
+                                                       numericInput(inputId = "area.ha", label="Area (ha)", value=10000, width="120px")
+                                                     ),
                                                      #   
                                                      conditionalPanel(
                                                        condition="input.area_type=='Map'",
@@ -1857,7 +1888,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                          # radioButtons(inputId = "ras.1", label="Relative abundance", choices=c("Random"), selected="Random",width="250px")
                                                      ),
                                                      
-
+                                                     
                                                      div(style="display:inline-block;vertical-align:top",
                                                          conditionalPanel(condition="input.ras_hab == 'Hab'",
                                                                           div(style="display:inline-block;vertical-align:top", 
@@ -1870,7 +1901,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      
                                                      
                                                      div(style="display:inline-block;vertical-align:bottom",
-                                                     verbatimTextOutput("text_density")),
+                                                         verbatimTextOutput("text_density")),
                                                      tags$div(title="Sigma x 2.45 is the radius of a circle  where an indivudual spends 95% of its time.",
                                                               h5(strong("Home range (Sigma)"))),
                                                      div(style="display:inline-block",title="Sigma x 5 is the diameter of the home range where an indivudual spends 95% of its time.",
@@ -1950,7 +1981,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      )),
                                               column(width=1,
                                                      # wellPanel(
-                                                       actionButton("update", "Add Scenario", icon("plus"),style="background-color:green")
+                                                     actionButton("update", "Add Scenario", icon("plus"),style="background-color:green")
                                               )
                                             ),
                                             
@@ -1961,7 +1992,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                               h4("Trapping"),
                                               wellPanel(
-
+                                                
                                                 div(style="display:inline-block;vertical-align:middle",h5("Trapping Method 1")),p(),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     tags$div(id="redtitle",title="The trap spacing in the east-west direction",
@@ -2095,68 +2126,68 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             
                                             
                                             conditionalPanel(
-                                            condition="input.bait_methods==1",
-                                            
-                                            h4("Bait Stations"),
-                                            wellPanel(
+                                              condition="input.bait_methods==1",
                                               
-                                              # div(style="display:inline-block;vertical-align:middle",h5("Baiting Method 1")),p(),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="The bait station spacing in the east-west direction",
-                                                           numericInput(inputId = "bait.x.space.a", label="Spacing E-W (m)", value="500",width="135px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="The bait station spacing in the north-south direction",
-                                                           numericInput(inputId = "bait.y.space.a", label="Spacing N-S (m)", value="500",width="135px"))),
-                                              # div(style="display:inline-block;vertical-align:bottom",
-                                              #     tags$div(title="The buffer from the edge",
-                                              #              numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Nightly probability of station failure  ",
-                                                           numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, min=0.01, max=0.99, step=0.01, width="120px"))),
-                                              
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId = "bait.g0.mean.a", label="Bait Sation Probability (g0) Mean", value=0.1, min=0.01, max=0.99, step=0.01, width="120px")),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId="bait.g0.sd.a", label='StdDev', value=.01, width="120px")),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  numericInput(inputId = "bait.g.zero.a", label="Proportion unbaitable", value=0.05, min=0.01, max=0.99, step=0.01, width="120px")),
-
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="Start night of baiting.",
-                                                           numericInput(inputId = "bait.start.a", label="Start night", value="35", width="120px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="Number of nights baits are set for.",
-                                                           numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
-                                                           numericInput(inputId = "bait.check.a", label="Check interval", value="25", width="120px"))),
-                                              
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Number of stations checked per day",
-                                                           numericInput(inputId = "bait.per.day.a", label="Bait stations checked per day", value=40, width="120px")
-                                                  )),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Labour cost - day rate ($)",
-                                                           numericInput(inputId = "bait.day.rate.a", label="Day rate ($)", value=400, width="135px")
-                                                  )),
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Bait costs - per station per check ($)",
-                                                           numericInput(inputId = "bait.cost.a", label="Bait costs ($/station/day)", value=5, width="135px")
-                                                  )),
-                                              
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  tags$div(title="Fixed cost ($) per bait station",
-                                                           numericInput(inputId = "cost.per.bait.a", label="Fixed cost per bait station ($)", value=60, width="120px")
-                                                  )),
-                                              
-                                              div(style="display:inline-block;vertical-align:bottom",
-                                                  verbatimTextOutput("text_bait_a_cost")),
-                                              
-                                              
-                                              
-                                              tags$style(type="text/css", "#redtitle {color: black}")
-                                              # ),
-                                            )
+                                              h4("Bait Stations"),
+                                              wellPanel(
+                                                
+                                                # div(style="display:inline-block;vertical-align:middle",h5("Baiting Method 1")),p(),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="The bait station spacing in the east-west direction",
+                                                             numericInput(inputId = "bait.x.space.a", label="Spacing E-W (m)", value="500",width="135px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="The bait station spacing in the north-south direction",
+                                                             numericInput(inputId = "bait.y.space.a", label="Spacing N-S (m)", value="500",width="135px"))),
+                                                # div(style="display:inline-block;vertical-align:bottom",
+                                                #     tags$div(title="The buffer from the edge",
+                                                #              numericInput(inputId = "bait.buff.a", label="Edge buffer (m)", value="100", min=0, max=1000, width="120px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Nightly probability of station failure  ",
+                                                             numericInput(inputId = "p.failure.a", label="Daily rate of failure", value=0, min=0.01, max=0.99, step=0.01, width="120px"))),
+                                                
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId = "bait.g0.mean.a", label="Bait Sation Probability (g0) Mean", value=0.1, min=0.01, max=0.99, step=0.01, width="120px")),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId="bait.g0.sd.a", label='StdDev', value=.01, width="120px")),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    numericInput(inputId = "bait.g.zero.a", label="Proportion unbaitable", value=0.05, min=0.01, max=0.99, step=0.01, width="120px")),
+                                                
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="Start night of baiting.",
+                                                             numericInput(inputId = "bait.start.a", label="Start night", value="35", width="120px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="Number of nights baits are set for.",
+                                                             numericInput(inputId = "bait.nights.a", label="Duration (nights)", value="50", width="120px"))),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(id="redtitle",title="The checking interval of the bait stations. For stations that are not cleared, set equal to Nights ",
+                                                             numericInput(inputId = "bait.check.a", label="Check interval", value="25", width="120px"))),
+                                                
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Number of stations checked per day",
+                                                             numericInput(inputId = "bait.per.day.a", label="Bait stations checked per day", value=40, width="120px")
+                                                    )),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Labour cost - day rate ($)",
+                                                             numericInput(inputId = "bait.day.rate.a", label="Day rate ($)", value=400, width="135px")
+                                                    )),
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Bait costs - per station per check ($)",
+                                                             numericInput(inputId = "bait.cost.a", label="Bait costs ($/station/day)", value=5, width="135px")
+                                                    )),
+                                                
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    tags$div(title="Fixed cost ($) per bait station",
+                                                             numericInput(inputId = "cost.per.bait.a", label="Fixed cost per bait station ($)", value=60, width="120px")
+                                                    )),
+                                                
+                                                div(style="display:inline-block;vertical-align:bottom",
+                                                    verbatimTextOutput("text_bait_a_cost")),
+                                                
+                                                
+                                                
+                                                tags$style(type="text/css", "#redtitle {color: black}")
+                                                # ),
+                                              )
                                             ),#End of Well Panel
                                             
                                             
@@ -2188,7 +2219,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:top",
                                                     verbatimTextOutput("text_hunt_a_cost")),
                                                 
-
+                                                
                                                 
                                                 div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="hunt_mask", label="Hunting mask", value=FALSE)),
                                                 div(style="display:inline-block;vertical-align:top",conditionalPanel(
@@ -2244,7 +2275,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             
                                             
                                    ),
-
+                                   
                                    tabPanel("3. Run Scenarios",
                                             # tableOutput('scenarios.table'),
                                             h4("Use this tab to check scenarios, and delete them if needed (click on the rows to delete)"), 
@@ -2271,9 +2302,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                               column(width=2,
                                                      # fluidRow(
-                                                   p(),p(),
-                                                       actionButton("act.btn.trapsim",strong("Run Simulations"), icon("paper-plane"),style="background-color:green")
-                                                     )
+                                                     p(),p(),
+                                                     actionButton("act.btn.trapsim",strong("Run Simulations"), icon("paper-plane"),style="background-color:green")
+                                              )
                                               
                                             ),
                                             
@@ -2285,7 +2316,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             DT::dataTableOutput("tableDT")
                                    ),
                                    
-
+                                   
                                    
                                    # ),
                                    tabPanel("4. Results",
@@ -2322,102 +2353,102 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                    tabPanel("5. Help",
                                             fluidRow(
                                               column(width=6,
-                                              h3("Instructions"),
-                                              "EradSim is based on an earlier tool called TrapSim which simulated trapping only.",
-                                              "For a background report on TrapSim, ",
-                                              tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),
-                                              br(),
-                                              "The purpose of the tool is to simulate various control scenarios in order to see which combination of methods is most likely to achieve eradication.",
-                                              "The app consist of 4 tabs:",p(),
-                                              h4(span("1. Area and Pest Parameters", style="color:blue")),
-                                              span( "~  Area", style="color:red"),
-                                              "- First set the eradication area. (The default is Mahia Peninsula, NZ). Click ",strong('Upload Shapefile')," then ",strong('Browse')," to open a window and navigate to the folder containing either the individual shapefile components (.dbf,.prj,.shp & .shx), or a .zip file which contains these components in a single file.", br(),
-                                              span( "~  Pest parameters", style="color:red"),
-                                              "- Set the number (and distribution) of animals, home range size (specified as sigma), and reproductive rates (annual growth rate, start day of breeding and length of breeding period) ", br(),
-                                              "- Animals will be either randomly located across the landscape, or according to habitat. If you select",span("'Habitat Specific'", style="color:red"),", then you must upload a raster of habitat that overlaps the shapefile. Rasters can be either .asc or .tif format.",br(),
-                                              "- Individuals are assumed to have a circular home-range which is defined by the parameter sigma (which represents the standard deviations of the bell-shaped bivariate-normal distribution. The 95% home range diameter is approximately 5 x Sigma", br(),
-                                              p(),
-                                              h4(span("2. Control Methods",style="color:blue")),
-                                              "- Currently there are 4 control methods to chose from - Trapping, Baitstations, Hunting and Aerial poisoning. There are various parameters for each relating to start deployment start day/length, spacing etc",
-                                              radioButtons(inputId="help_control",label="Click each for more information",choices=c("Trapping"="trap","Bait-stations"="bait","Hunting"="hunt","Aerial poison"="pois"), inline=TRUE, selected=""),
-                                              " Set a control scenario by selecting one or more methods - you can model methods concurrently.",
-                                              " Click 'Add Scenario' to add your control to the list of scenarios you wish to model. (These will appear in Tab 3). You can build up as many Control scenarios as you like.", 
-                                              " Each scenario will be given an automatically generated name, however these can be changed ", strong("before"), " clicking the 'Add Scenario' button", br(),
-                                              p(),
-                                              
-                                              h4(span("3. Run Scenarios ",style="color:blue")),
-                                              "- When you have specified the set of control scenarios you wish to model, use this tab to check  the scenarios (you can delete one or all of them).",
-                                              " Enter the number of iterations for each and the simulation length in days.",br(),
-                                              "Click 'Run Simulation'", p(),
-                                              h4(span("4. Results ",style="color:blue")),
-                                              "- Explore the results  - graphs and tables of animals remaining, Total costs etc", br(),
-                                              
-                                              
-                                              # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
-                                              p(),
-                                              strong("Hover cursor over each of the input boxes for pop-up help.")
-                                              
+                                                     h3("Instructions"),
+                                                     "EradSim is based on an earlier tool called TrapSim which simulated trapping only.",
+                                                     "For a background report on TrapSim, ",
+                                                     tags$a(href="https://www.pfhb.nz/assets/Document-Library/Gormley-and-Warburton-2017-TrapSim-a-decision-support-tool.pdf", "Click here.", target="_blank"),
+                                                     br(),
+                                                     "The purpose of the tool is to simulate various control scenarios in order to see which combination of methods is most likely to achieve eradication.",
+                                                     "The app consist of 4 tabs:",p(),
+                                                     h4(span("1. Area and Pest Parameters", style="color:blue")),
+                                                     span( "~  Area", style="color:red"),
+                                                     "- First set the eradication area. (The default is Mahia Peninsula, NZ). Click ",strong('Upload Shapefile')," then ",strong('Browse')," to open a window and navigate to the folder containing either the individual shapefile components (.dbf,.prj,.shp & .shx), or a .zip file which contains these components in a single file.", br(),
+                                                     span( "~  Pest parameters", style="color:red"),
+                                                     "- Set the number (and distribution) of animals, home range size (specified as sigma), and reproductive rates (annual growth rate, start day of breeding and length of breeding period) ", br(),
+                                                     "- Animals will be either randomly located across the landscape, or according to habitat. If you select",span("'Habitat Specific'", style="color:red"),", then you must upload a raster of habitat that overlaps the shapefile. Rasters can be either .asc or .tif format.",br(),
+                                                     "- Individuals are assumed to have a circular home-range which is defined by the parameter sigma (which represents the standard deviations of the bell-shaped bivariate-normal distribution. The 95% home range diameter is approximately 5 x Sigma", br(),
+                                                     p(),
+                                                     h4(span("2. Control Methods",style="color:blue")),
+                                                     "- Currently there are 4 control methods to chose from - Trapping, Baitstations, Hunting and Aerial poisoning. There are various parameters for each relating to start deployment start day/length, spacing etc",
+                                                     radioButtons(inputId="help_control",label="Click each for more information",choices=c("Trapping"="trap","Bait-stations"="bait","Hunting"="hunt","Aerial poison"="pois"), inline=TRUE, selected=""),
+                                                     " Set a control scenario by selecting one or more methods - you can model methods concurrently.",
+                                                     " Click 'Add Scenario' to add your control to the list of scenarios you wish to model. (These will appear in Tab 3). You can build up as many Control scenarios as you like.", 
+                                                     " Each scenario will be given an automatically generated name, however these can be changed ", strong("before"), " clicking the 'Add Scenario' button", br(),
+                                                     p(),
+                                                     
+                                                     h4(span("3. Run Scenarios ",style="color:blue")),
+                                                     "- When you have specified the set of control scenarios you wish to model, use this tab to check  the scenarios (you can delete one or all of them).",
+                                                     " Enter the number of iterations for each and the simulation length in days.",br(),
+                                                     "Click 'Run Simulation'", p(),
+                                                     h4(span("4. Results ",style="color:blue")),
+                                                     "- Explore the results  - graphs and tables of animals remaining, Total costs etc", br(),
+                                                     
+                                                     
+                                                     # "For input parameters with red labels, enter values separated by a slash, e.g. 1000/500 ",
+                                                     p(),
+                                                     strong("Hover cursor over each of the input boxes for pop-up help.")
+                                                     
                                               ),
                                               column(width=5,
-                                              
-
-                                              
-                                              conditionalPanel(condition="input.help_control=='trap'",
-                                              span( "~  Trapping", style="color:red"),br(),"Traps can be either live capture traps or kill traps (single kill or self-resetting), deployed for a set period of time,",br(),
-                                              strong("-Spacing")," - traps are laid out on a grid specified by trap-spacings in the E-W and N-S directions and are clipped to fit inside the shapefile.",br(),
-                                              strong("-Daily bycatch")," is the daily probability of traps catching non-target animals, but can also include the daily failure rate. This probability (between 0 - 1) is specified 'per trap'. ",br(),
-                                              strong("-Max catch")," is the maximum trap capacity - generally 1, unless multi-capture or self resetting traps are used.",br(),
-                                              strong("-g0")," is the nightly probability of a trap catching an individual whose home range centre is at the trap location.",
-                                              "This parameter is generally estimated from spatial capture-recapture studies. Published estimates are available for some species+device combinations.",br(),
-                                              strong("-Proportion untrappable")," - In some populations, there will be a proportion of the population that are untrappable due to factors such as behavioural differences or trap-shyness.", br(),
-                                              strong("-Start night")," is the night of the simulation that trapping starts, and ",strong("Duration")," is the length of time traps are deployed.",br(),
-                                              strong("-Check interval")," is the number of nights between checking and clearing/resetting traps. For live capture traps this must be set to 1, however for kill traps this may be longer. ",br(),
-                                              strong("-Traps checked perday")," is the approximate number of traps that a field tech can check each day.",br(),
-                                              strong("-Day rate ($)")," is the labour cost per person, and ",strong("Fixed cost per trap ($)")," is the cost of trap purchase (including lures etc)."
-                                              ),
-                                              
-                                              conditionalPanel(condition="input.help_control=='bait'",
-                                              span( "~  Bait-stations", style="color:red"),br(),
-                                              strong("-Spacing")," - bait-stations are laid out on a grid specified by spacings in the E-W and N-S directions and are clipped to fit inside the shapefile.",
-                                              strong("-Daily rate of failure")," is the daily probability of a bait-station failing (for bait-stations with a mechanical opening. This probability (between 0 - 1) is specified 'per bait-station'. ",br(),
-                                              strong("-g0")," is the nightly probability of a bait-station succesfully poisoning an individual whose home range centre is at the bait location.",
-                                              "This parameter is generally estimated from spatial capture-recapture studies. Published estimates are available for some species+device combinations.",br(),
-                                              strong("-Proportion unbaitable")," - In some populations, there will be a proportion of the population that will not interact with bait-stations due to factors such as behavioural differences or shyness.", br(),
-                                              strong("-Start night")," is the night of the simulation that baiting starts, and ",strong("Duration")," is the length of time stations are deployed.",br(),
-                                              strong("-Check interval")," is the number of nights between checking and refilling bait-stations. ",br(),
-                                              strong("-Bait stations checked perday")," is the approximate number of bait-stations that a field tech can check each day.",br(),
-                                              strong("-Day rate ($)")," is the labour cost per person, and ",strong("Fixed cost per bait-station ($)")," is the unit cost of bait-stations."
-                                              
-                                              ),
-                                              
-                                              conditionalPanel(condition="input.help_control=='hunt'",
-                                                               span( "~  Hunting", style="color:red"),br(),
-                                                               "This option simulates hunting across the area (or a subset of the area). It is relatively simplified in that a distance per day is specified by the user which is converted into a probability of kill based on the kill-rate parameter. This can apply to ground or aerial hunting, however each will have a different kill rate.",br(),
-                                                               strong("-Start day")," - the day of the simulation that hunting starts.",br(),
-                                                               strong("-Days hunted")," - the duration of the hunting period.", br(),
-                                                               strong("-Distance per day (km)")," - the liear distance per day covered by hunting in kilometers.", br(),
-                                                               strong("-Kill rate")," - this parameter is combined with distance per day to calculate the probability of an individual being hunted on a single day, given by:",br(),
-                                                               "p.kill = 1 - exp(killrate x Effort)",br()," where Effort = distance (km) per km\U00B2 of the area ", br(),
-                                                               "Click ",strong("Effort vs prob of kill"),"to see how changing the kill rate and distance changes the probability of kill.", br(),
-                                                               strong("-Hunting mask")," - You can upload a raster (.asc or .tif) that defines the area that is to be hunted. The raster must consist of grid cells where 1 corresponds to areas to be hunted and 0s otherwise.",br(),
-                                                               img(src="mask_eg.png", height = 250, align="center", hspace=20,vspace=10)
-                                                               
-                                              ),
-                                              conditionalPanel(condition="input.help_control=='pois'",
-                                                               span( "~  Aerial poisoning", style="color:red"),br(),
-                                                               "This option simulates aerial posioning across the area (or a subset of the area). It is relatively simplified in that a distance per day is specified by the user which is converted into a probability of kill based on the kill-rate parameter.",br(),
-                                                               strong("-Start day")," - the day of the simulation that poisoning starts.",br(),
-                                                               strong("-Operation length")," - the duration of the poisoning period.", br(),
-                                                               strong("-Percent kill")," - this is the main parameter and is the expected percentage of the population that will be killed by the aerial control operation (spread out over the operation duration)",br(),
-                                                               strong("-Aerial mask")," - as with hunting, you can upload a raster (.asc or .tif) that defines the area that is to be aerial poisoned. The raster must consist of grid cells where 1 corresponds to areas to be controlled and 0s otherwise.",br(),
-                                                               img(src="mask_eg.png", height = 250, align="center", hspace=20,vspace=10)
-                                                               
-                                              )
-                                              
-                                                               
-                                              # Eff<-hunt.eff.a/(mydata.shp()$ha/100)
-                                              # hunt.daily.pkill<-1-exp(-(hunt.rho.a*Eff))
-                                            )#End of column
+                                                     
+                                                     
+                                                     
+                                                     conditionalPanel(condition="input.help_control=='trap'",
+                                                                      span( "~  Trapping", style="color:red"),br(),"Traps can be either live capture traps or kill traps (single kill or self-resetting), deployed for a set period of time,",br(),
+                                                                      strong("-Spacing")," - traps are laid out on a grid specified by trap-spacings in the E-W and N-S directions and are clipped to fit inside the shapefile.",br(),
+                                                                      strong("-Daily bycatch")," is the daily probability of traps catching non-target animals, but can also include the daily failure rate. This probability (between 0 - 1) is specified 'per trap'. ",br(),
+                                                                      strong("-Max catch")," is the maximum trap capacity - generally 1, unless multi-capture or self resetting traps are used.",br(),
+                                                                      strong("-g0")," is the nightly probability of a trap catching an individual whose home range centre is at the trap location.",
+                                                                      "This parameter is generally estimated from spatial capture-recapture studies. Published estimates are available for some species+device combinations.",br(),
+                                                                      strong("-Proportion untrappable")," - In some populations, there will be a proportion of the population that are untrappable due to factors such as behavioural differences or trap-shyness.", br(),
+                                                                      strong("-Start night")," is the night of the simulation that trapping starts, and ",strong("Duration")," is the length of time traps are deployed.",br(),
+                                                                      strong("-Check interval")," is the number of nights between checking and clearing/resetting traps. For live capture traps this must be set to 1, however for kill traps this may be longer. ",br(),
+                                                                      strong("-Traps checked perday")," is the approximate number of traps that a field tech can check each day.",br(),
+                                                                      strong("-Day rate ($)")," is the labour cost per person, and ",strong("Fixed cost per trap ($)")," is the cost of trap purchase (including lures etc)."
+                                                     ),
+                                                     
+                                                     conditionalPanel(condition="input.help_control=='bait'",
+                                                                      span( "~  Bait-stations", style="color:red"),br(),
+                                                                      strong("-Spacing")," - bait-stations are laid out on a grid specified by spacings in the E-W and N-S directions and are clipped to fit inside the shapefile.",
+                                                                      strong("-Daily rate of failure")," is the daily probability of a bait-station failing (for bait-stations with a mechanical opening. This probability (between 0 - 1) is specified 'per bait-station'. ",br(),
+                                                                      strong("-g0")," is the nightly probability of a bait-station succesfully poisoning an individual whose home range centre is at the bait location.",
+                                                                      "This parameter is generally estimated from spatial capture-recapture studies. Published estimates are available for some species+device combinations.",br(),
+                                                                      strong("-Proportion unbaitable")," - In some populations, there will be a proportion of the population that will not interact with bait-stations due to factors such as behavioural differences or shyness.", br(),
+                                                                      strong("-Start night")," is the night of the simulation that baiting starts, and ",strong("Duration")," is the length of time stations are deployed.",br(),
+                                                                      strong("-Check interval")," is the number of nights between checking and refilling bait-stations. ",br(),
+                                                                      strong("-Bait stations checked perday")," is the approximate number of bait-stations that a field tech can check each day.",br(),
+                                                                      strong("-Day rate ($)")," is the labour cost per person, and ",strong("Fixed cost per bait-station ($)")," is the unit cost of bait-stations."
+                                                                      
+                                                     ),
+                                                     
+                                                     conditionalPanel(condition="input.help_control=='hunt'",
+                                                                      span( "~  Hunting", style="color:red"),br(),
+                                                                      "This option simulates hunting across the area (or a subset of the area). It is relatively simplified in that a distance per day is specified by the user which is converted into a probability of kill based on the kill-rate parameter. This can apply to ground or aerial hunting, however each will have a different kill rate.",br(),
+                                                                      strong("-Start day")," - the day of the simulation that hunting starts.",br(),
+                                                                      strong("-Days hunted")," - the duration of the hunting period.", br(),
+                                                                      strong("-Distance per day (km)")," - the liear distance per day covered by hunting in kilometers.", br(),
+                                                                      strong("-Kill rate")," - this parameter is combined with distance per day to calculate the probability of an individual being hunted on a single day, given by:",br(),
+                                                                      "p.kill = 1 - exp(killrate x Effort)",br()," where Effort = distance (km) per km\U00B2 of the area ", br(),
+                                                                      "Click ",strong("Effort vs prob of kill"),"to see how changing the kill rate and distance changes the probability of kill.", br(),
+                                                                      strong("-Hunting mask")," - You can upload a raster (.asc or .tif) that defines the area that is to be hunted. The raster must consist of grid cells where 1 corresponds to areas to be hunted and 0s otherwise.",br(),
+                                                                      img(src="mask_eg.png", height = 250, align="center", hspace=20,vspace=10)
+                                                                      
+                                                     ),
+                                                     conditionalPanel(condition="input.help_control=='pois'",
+                                                                      span( "~  Aerial poisoning", style="color:red"),br(),
+                                                                      "This option simulates aerial posioning across the area (or a subset of the area). It is relatively simplified in that a distance per day is specified by the user which is converted into a probability of kill based on the kill-rate parameter.",br(),
+                                                                      strong("-Start day")," - the day of the simulation that poisoning starts.",br(),
+                                                                      strong("-Operation length")," - the duration of the poisoning period.", br(),
+                                                                      strong("-Percent kill")," - this is the main parameter and is the expected percentage of the population that will be killed by the aerial control operation (spread out over the operation duration)",br(),
+                                                                      strong("-Aerial mask")," - as with hunting, you can upload a raster (.asc or .tif) that defines the area that is to be aerial poisoned. The raster must consist of grid cells where 1 corresponds to areas to be controlled and 0s otherwise.",br(),
+                                                                      img(src="mask_eg.png", height = 250, align="center", hspace=20,vspace=10)
+                                                                      
+                                                     )
+                                                     
+                                                     
+                                                     # Eff<-hunt.eff.a/(mydata.shp()$ha/100)
+                                                     # hunt.daily.pkill<-1-exp(-(hunt.rho.a*Eff))
+                                              )#End of column
                                             ))
                                    
                        )
