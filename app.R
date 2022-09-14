@@ -1981,7 +1981,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      )),
                                               column(width=1,
                                                      # wellPanel(
-                                                     actionButton("update", "Add Scenario", icon("plus"),style="background-color:green")
+                                                     actionButton("update", strong("Add Scenario"), icon("layer-group"),style="background-color:green")
                                               )
                                             ),
                                             
@@ -2305,11 +2305,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                      p(),p(),
                                                      actionButton("act.btn.trapsim",strong("Run Simulations"), icon("paper-plane"),style="background-color:green")
                                               )
-                                              
                                             ),
-                                            
-                                            actionButton("deleteRows", strong("Delete Selected Rows")),
-                                            actionButton("deleteAllRows", strong("Delete All Rows")),br(),
+                                            actionButton("deleteRows", strong("Delete Selected Rows"), icon("eraser"),style="background-color:indianred"),
+                                            actionButton("deleteAllRows", strong("Delete All Rows"), icon("trash"),style="background-color:firebrick"),br(),
                                             p(),
                                             # ),
                                             
@@ -2346,7 +2344,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               
                                             ),
                                             fluidRow(
-                                              downloadButton("report", "Generate report") 
+                                              downloadButton("report", strong("Generate report"),icon=icon("file-export")) 
                                             )
                                             
                                    ),
