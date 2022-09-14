@@ -267,16 +267,16 @@ server<-function(input, output, session) {
         trap.mask = mydata.trap()$myraster
       }
       
-      #For a second type of trapping....Might not be needed...
-      if(input$show_trap_b==1){
-        x.space.b = input$traps.x.space.b
-        y.space.b = input$traps.y.space.b
-        trap.start.b = input$trap.start.b
-        trap.nights.b = input$trap.nights.b
-        check.interval.b = input$n.check.b
-        g.mean.b=input$g0.mean.b
-        g.zero.b=input$g0.zero.b
-      }
+      # #For a second type of trapping....Might not be needed...
+      # if(input$show_trap_b==1){
+      #   x.space.b = input$traps.x.space.b
+      #   y.space.b = input$traps.y.space.b
+      #   trap.start.b = input$trap.start.b
+      #   trap.nights.b = input$trap.nights.b
+      #   check.interval.b = input$n.check.b
+      #   g.mean.b=input$g0.mean.b
+      #   g.zero.b=input$g0.zero.b
+      # }
     }
     
     
@@ -683,6 +683,8 @@ server<-function(input, output, session) {
         ha<-mydata.shp()$ha
         shp<-mydata.shp()$shp
         # shp.2<-mydata.zone()$shp.2
+        
+        sim_type<-"individ"  #Would change this to input$sim_type if needed
 
         #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
         #Make the trap & bait station locations 
@@ -929,7 +931,7 @@ server<-function(input, output, session) {
           
           #The first one initialises for a grid based simulation - i.e. Audrey's model.
           #The second is the trap+animal pairwise  - i.e. it works out the probability of capture for each device and animal, by device type.
-          if (input$sim_type=='grid'){
+          if (sim_type=='grid'){
             animals.SP<-animals.xy
             coordinates(animals.SP) <- c( "X", "Y" )
             proj4string(animals.SP) <- CRS(proj4string)
@@ -998,7 +1000,7 @@ server<-function(input, output, session) {
                 if(t%in%check.vec.a==TRUE){#If it is a trap clearance day...then reset the traps to T *before* trappig starts!
                   # trap.remain<-rep(T,n.traps)		
                   trap.remain.a<-rep(max.catch.a,n.traps.a)
-                  if (input$sim_type=='grid'){
+                  if (sim_type=='grid'){
                     grid.traps<-grid.traps.master
                   }
                   
@@ -1010,7 +1012,7 @@ server<-function(input, output, session) {
                 
                 if(sum(not.caught)>0){
                   for (j in not.caught){ 							#For each animal not already caught
-                    if (input$sim_type=='grid'){
+                    if (sim_type=='grid'){
                       #Based on Audrey's model...
                       pcap<-1-exp(-(animals.xy$PreProb[j]*grid.traps[animals.xy$CellIndex[j]]))
                       if(rbinom(1,1,prob=pcap)==1){ #If animal gets caught
@@ -1234,7 +1236,7 @@ server<-function(input, output, session) {
                 
                 
                 
-                if (input$sim_type=='grid'){
+                if (sim_type=='grid'){
                   new.which.grid<-st_within(st_as_sf(new.animals.SP), shp_grid)
                   new.animals.xy$CellIndex<-as.data.frame(new.which.grid)$col.id
                   new.animals.xy$PreProb<-(2*pi*new.animals.xy$g0.a*new.animals.xy$Sigma^2)/cell.area.m2   #The pre probability...
@@ -1284,7 +1286,7 @@ server<-function(input, output, session) {
             
             
           }	 #End of the night
-          if (input$sim_type=='grid'){
+          if (sim_type=='grid'){
             trap.catch.mat[ii,]<-(trap.catch.vec)
           }else{
             if(is.na(trap.start.a)==FALSE){
@@ -1663,7 +1665,7 @@ output$plot.trap.asc<-renderPlot({
   
   #Cost of traps on the Control Methods tab
   output$text_trap_a_cost<-renderText({
-    
+    shp<-mydata.shp()$shp 
     if(input$trap_mask==1){
       validate(
         need(input$trap_asc != "", "NA"),
@@ -1673,11 +1675,7 @@ output$plot.trap.asc<-renderPlot({
     }else{
       traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)  
     }
-    
-    
-    
-    shp<-mydata.shp()$shp    
-    
+
     n.traps.a<-dim(traps.a)[1]
     # check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
     checks<-ceiling(input$trap.nights.a/input$n.check.a)+1  #The number of checks - copes with check intervals that dont fit nealy into the duration
@@ -2013,7 +2011,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     verbatimTextOutput("text_trap_a_cost")),
-                                                
+                                                br(),
                                                 div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="trap_mask", label="Trapping mask", value=FALSE)),
                                                 div(style="display:inline-block;vertical-align:top",conditionalPanel(
                                                   condition="input.trap_mask==1",
@@ -2034,64 +2032,64 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 # ),
                                                 
                                                 p(),
-                                                div(style="display:inline-block;vertical-align:bottom",
-                                                    checkboxInput(inputId = "show_trap_b",label="Second Trap Method", value=FALSE)
-                                                ),
-                                                conditionalPanel(
-                                                  condition="input.show_trap_b==2",
-                                                  # wellPanel(
-                                                  div(style="display:inline-block;vertical-align:bottom",h5("Trapping Method 2")),p(),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="The trap spacing in the east-west direction",
-                                                               
-                                                               numericInput(inputId = "traps.x.space.b", label="Spacing E-W (m)", value="200",width="135px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="The trap spacing in the north-south direction",
-                                                               numericInput(inputId = "traps.y.space.b", label="Spacing N-S (m)", value="200",width="135px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Nightly probability of by-catch, false triggers etc  ",
-                                                               numericInput(inputId = "p.bycatch.b", label="Daily bycatch", value=0, width="120px"))),
-                                                  
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Maximum catch per trap  ",
-                                                               numericInput(inputId = "max.catch.b", label="Max catch", value=1, width="135px"))),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId = "g0.mean.b", label="Trap Probability (g0) Mean", value=0.2, width="120px")),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId="g0.sd.b", label='StdDev', value=.01, width="120px")),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      numericInput(inputId = "g0.zero.b", label="Proportion untrappable", value=0.05, width="120px")),
-
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="Start night of trapping.",
-                                                               numericInput(inputId = "trap.start.b", label="Start night", value="50", width="120px"))),
-                                                  
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="Number of nights traps are set for.",
-                                                               numericInput(inputId = "trap.nights.b", label="Duration (nights)", value="20", width="120px"))),
-                                                  
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(id="redtitle",title="The checking interval of the traps. For traps that are not cleared, set equal to Nights ",
-                                                               numericInput(inputId = "n.check.b", label="Check interval", value="10", width="120px"))),
-                                                  
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Number of traps checked per day",
-                                                               numericInput(inputId = "traps.per.day.b", label="Traps checked per day", value=40, width="120px")
-                                                      )),
-                                                  
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Labour cost - day rate ($)",
-                                                               numericInput(inputId = "day.rate.b", label="Day rate ($)", value=400, width="135px")
-                                                      )),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      tags$div(title="Fixed cost ($) per trap",
-                                                               numericInput(inputId = "cost.per.trap.b", label="Fixed cost per trap ($)", value=20, width="120px")
-                                                      )),
-                                                  div(style="display:inline-block;vertical-align:bottom",
-                                                      verbatimTextOutput("text_trap_b_cost"))
-                                                  
-                                                  
-                                                ) #End of Well Panel
+                                                # div(style="display:inline-block;vertical-align:bottom",
+                                                #     checkboxInput(inputId = "show_trap_b",label="Second Trap Method", value=FALSE)
+                                                # ),
+                                                # conditionalPanel(
+                                                #   condition="input.show_trap_b==2",
+                                                #   # wellPanel(
+                                                #   div(style="display:inline-block;vertical-align:bottom",h5("Trapping Method 2")),p(),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(id="redtitle",title="The trap spacing in the east-west direction",
+                                                #                
+                                                #                numericInput(inputId = "traps.x.space.b", label="Spacing E-W (m)", value="200",width="135px"))),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(id="redtitle",title="The trap spacing in the north-south direction",
+                                                #                numericInput(inputId = "traps.y.space.b", label="Spacing N-S (m)", value="200",width="135px"))),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(title="Nightly probability of by-catch, false triggers etc  ",
+                                                #                numericInput(inputId = "p.bycatch.b", label="Daily bycatch", value=0, width="120px"))),
+                                                #   
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(title="Maximum catch per trap  ",
+                                                #                numericInput(inputId = "max.catch.b", label="Max catch", value=1, width="135px"))),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       numericInput(inputId = "g0.mean.b", label="Trap Probability (g0) Mean", value=0.2, width="120px")),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       numericInput(inputId="g0.sd.b", label='StdDev', value=.01, width="120px")),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       numericInput(inputId = "g0.zero.b", label="Proportion untrappable", value=0.05, width="120px")),
+                                                # 
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(id="redtitle",title="Start night of trapping.",
+                                                #                numericInput(inputId = "trap.start.b", label="Start night", value="50", width="120px"))),
+                                                #   
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(id="redtitle",title="Number of nights traps are set for.",
+                                                #                numericInput(inputId = "trap.nights.b", label="Duration (nights)", value="20", width="120px"))),
+                                                #   
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(id="redtitle",title="The checking interval of the traps. For traps that are not cleared, set equal to Nights ",
+                                                #                numericInput(inputId = "n.check.b", label="Check interval", value="10", width="120px"))),
+                                                #   
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(title="Number of traps checked per day",
+                                                #                numericInput(inputId = "traps.per.day.b", label="Traps checked per day", value=40, width="120px")
+                                                #       )),
+                                                #   
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(title="Labour cost - day rate ($)",
+                                                #                numericInput(inputId = "day.rate.b", label="Day rate ($)", value=400, width="135px")
+                                                #       )),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       tags$div(title="Fixed cost ($) per trap",
+                                                #                numericInput(inputId = "cost.per.trap.b", label="Fixed cost per trap ($)", value=20, width="120px")
+                                                #       )),
+                                                #   div(style="display:inline-block;vertical-align:bottom",
+                                                #       verbatimTextOutput("text_trap_b_cost"))
+                                                #   
+                                                #   
+                                                # ) #End of Well Panel for trap b
                                               )
                                             ),
                                             
@@ -2255,7 +2253,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               column(width=3,
                                                      wellPanel(
                                                        
-                                                       radioButtons(inputId="sim_type", label="Simulation Type",choices=c("Individual traps"="individ"), selected="individ", width="200px"),
+                                                       # radioButtons(inputId="sim_type", label="Simulation Type",choices=c("Individual traps"="individ"), selected="individ", width="200px"),
                                                        div(style="display:inline-block;vertical-align:bottom",
                                                            numericInput(inputId = "n.nights",label="Simulation length (days)", value=100, width="150px")),
                                                        div(style="display:inline-block;vertical-align:bottom",
@@ -2336,7 +2334,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                               "- First set the eradication area. (The default is Mahia Peninsula, NZ). Click ",strong('Upload Shapefile')," then ",strong('Browse')," to open a window and navigate to the folder containing either the individual shapefile components (.dbf,.prj,.shp & .shx), or a .zip file which contains these components in a single file.", br(),
                                               span( "~  Pest parameters", style="color:red"),
                                               "- Set the number (and distribution) of animals, home range size (specified as sigma), and reproductive rates (annual growth rate, start day of breeding and length of breeding period) ", br(),
-                                              "- Animals will be either randomly located across the landscape, or according to habitat. If you select 'Habitat Specific', then you must upload a raster of habitat that overlaps the shapefile. Rasters can be either .asc or .tif format.",br(),
+                                              "- Animals will be either randomly located across the landscape, or according to habitat. If you select",span("'Habitat Specific'", style="color:red"),", then you must upload a raster of habitat that overlaps the shapefile. Rasters can be either .asc or .tif format.",br(),
                                               "- Individuals are assumed to have a circular home-range which is defined by the parameter sigma (which represents the standard deviations of the bell-shaped bivariate-normal distribution. The 95% home range diameter is approximately 5 x Sigma", br(),
                                               p(),
                                               h4(span("2. Control Methods",style="color:blue")),
