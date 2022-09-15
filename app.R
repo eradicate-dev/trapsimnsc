@@ -165,7 +165,7 @@ get.pest.locs<-function(ras, n.poss, shp){
 
 
 
-#  Make the trap locations from a x/y spacing, buffer and shapefile
+#  Make the trap locations from a x/y spacing, buffer and shapefile - and if supplied, a masking raster of 0/1
 make.trap.locs<-function(x.space,y.space,buff,shp, ras=NULL){
   
   b.box<-bbox(shp)
@@ -224,7 +224,7 @@ server<-function(input, output, session) {
   observeEvent(input$deleteAllRows,{
     showModal(modal_confirm_2)
   })
-  observeEvent(input$ok_all_scen, {
+  observeEvent(input$ok_all_scen, {  #When OK is pressed - remove em all
     t<-scenParam()
     t <- t[-(1:dim(t)[1]),]
     scenParam(t)
@@ -235,7 +235,7 @@ server<-function(input, output, session) {
   observeEvent(input$deleteRows,{
     showModal(modal_confirm_1)
   })
-  observeEvent(input$ok_sel_scen, {
+  observeEvent(input$ok_sel_scen, {  #When OK is pressed - remove the selected
     t<-scenParam()
     if (!is.null(input$tableDT_rows_selected)) {
       t <- t[-as.numeric(input$tableDT_rows_selected),]
@@ -248,9 +248,9 @@ server<-function(input, output, session) {
   observeEvent(input$cancel, {
     removeModal()
   })
- 
   
-  #Code to add a scenario when the Add Scenario button is pressed
+  
+  #Code to add a scenario when the Add Scenario button is pressed - with error handling
   observeEvent(input$update,{
     shp<-mydata.shp()$shp
     
@@ -338,6 +338,7 @@ server<-function(input, output, session) {
     bait.y.space.a = NA
     bait.g.mean.a = NA
     bait.g.zero.a = NA
+    bait.mask = NA
     if(input$bait_methods==1){
       bait.start.a = input$bait.start.a
       bait.nights.a = input$bait.nights.a
@@ -346,6 +347,9 @@ server<-function(input, output, session) {
       bait.y.space.a = input$bait.y.space.a
       bait.g.mean.a = input$bait.g0.mean.a
       bait.g.zero.a = input$bait.g.zero.a
+      if(input$bait_mask==1){ #Work out the trapped area and save the file path to the raster that will be used.
+        bait.mask = mydata.bait()$myraster
+      }
     }
     
     
@@ -412,6 +416,7 @@ server<-function(input, output, session) {
       bait.y.space.a = bait.y.space.a,
       bait.g.mean.a = bait.g.mean.a,
       bait.g.zero.a = bait.g.zero.a,
+      bait.mask = bait.mask,
       pois.start.a = pois.start.a,
       pois.days.a = pois.days.a,
       # pois.prop.a = pois.prop.a,
@@ -434,8 +439,8 @@ server<-function(input, output, session) {
     
     #Test for duplicates and blank scenarios
     t<-scenParam()
-    if(sum(duplicated(t[,2:33]))==1){
-      t<-t[!duplicated(t[,2:33]), ]        #Dont add duplicates
+    if(sum(duplicated(t[,2:34]))==1){
+      t<-t[!duplicated(t[,2:34]), ]        #Dont add duplicates
       showModal(modalDialog(
         title = "Error: Duplicate scenario!","This control scenario has already been added",easyClose = TRUE, fade=FALSE, size="s",
         footer =  modalButton("Cancel", icon=icon("exclamation"))
@@ -452,7 +457,7 @@ server<-function(input, output, session) {
       #   title = "Success",paste0(input$scenname," added"),easyClose = TRUE, fade=TRUE, size="s",
       #   footer =  modalButton("OK", icon=icon("smile"))
       # ))
-      showNotification(paste0(input$scenname," added"), type="message")
+      showNotification(paste0(input$scenname," added"), type="message", duration=1)
       id<-dim((t))[1]+1
       updateTextInput(session,"scenname", "Scenario name", value=sprintf("S%03d", id))
     }
@@ -477,6 +482,20 @@ server<-function(input, output, session) {
       }}
     return(list(ras.trap=ras.trap, myraster=myraster))
   })
+  
+  
+  #Read in the trapping mask. And output the raster as well as the path to it.
+  mydata.bait<-reactive({
+    if(input$bait_mask==1){
+      if(is.null(input$bait_asc)==FALSE){
+        myraster<-input$bait_asc$datapath   #basename for filename, dirname
+        # myraster<-input$hunt_asc$basename
+        ras.bait<-raster(myraster)
+        
+      }}
+    return(list(ras.bait=ras.bait, myraster=myraster))
+  })
+  
   
   #Read in the hunting mask. And output the raster as well as the path to it.
   mydata.hunt<-reactive({
@@ -609,7 +628,7 @@ server<-function(input, output, session) {
   
   #When the simulations get set to run, automatically switch to the results tab. Noice!
   observeEvent(input$act.btn.trapsim,{
-    updateTabsetPanel(session, "inTabset",selected = "4. Results")
+    updateTabsetPanel(session, "inTabset", selected = "4. Results")
   })
   
   #After pushing the RunTrapSim button,...
@@ -674,6 +693,7 @@ server<-function(input, output, session) {
         bait.buff.a<-buffer
         bait.g0.mean.a<-params$bait.g.mean.a[kk]
         bait.g.zero.a<- params$bait.g.zero.a[kk]
+        bait.mask<-params$bait.mask[kk]
         
         hunt.start.a<-params$hunt.start.a[kk]
         hunt.days.a<-params$hunt.days.a[kk]
@@ -743,7 +763,13 @@ server<-function(input, output, session) {
         
         #Make the bait station locations
         if(is.na(bait.start.a)==FALSE){
-          baits.a<-make.trap.locs(bait.x.space.a, bait.y.space.a, bait.buff.a, shp)
+          if(is.na(bait.mask)==TRUE){
+            baits.a<-make.trap.locs(bait.x.space.a, bait.y.space.a, bait.buff.a, shp)
+          }else{
+            baits.a<-make.trap.locs(bait.x.space.a, bait.y.space.a, bait.buff.a, shp, ras=raster(bait.mask))
+            # traps.a<-make.trap.locs(x.space.a, y.space.a,buffer.a,shp, ras=raster(trap.mask))            
+          }
+          
           coordinates(baits.a) <- c( "X", "Y" )
           proj4string(baits.a) <- CRS(proj4string)
           baits.xy.a<-as.data.frame(baits.a)
@@ -1377,7 +1403,8 @@ server<-function(input, output, session) {
     # params<-params[,c(37,36,32,33,34,35,1:31)]
     # params<-params[,c(37,36,32,33,34,35,1:7,15:31)]
     # params<-params[,c(1,33,39,38,34,35,36,37,2:8,16:32)]
-    params<-params[,c(1,34,40,39,35,36,37,38,2:9,17:33)]
+    # params<-params[,c(1,34,40,39,35,36,37,38,2:9,17:33)]
+    params<-params[,c(1,35,41,40,36,37,38,39,2:9,17:34)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, hunt.catch.list=hunt.catch.list, pois.catch.list=pois.catch.list, pop.size.mat=pop.size.mat, animals.xy=animals.xy, hunt.catch.mat=hunt.catch.mat, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1610,7 +1637,16 @@ server<-function(input, output, session) {
     plot(mydata.shp()$shp, add=TRUE)
     
   })
-  
+  output$plot.bait.asc<-renderPlot({
+    validate(
+      need(input$bait_asc != "", "upload a tif or asc file to mask the baiting area"),
+    )
+    ras.bait<-raster(mydata.bait()$myraster)
+    plot(ras.bait)
+    # plot(mydata.pois()$ras.pois)
+    plot(mydata.shp()$shp, add=TRUE)
+    
+  }) 
   
   
   output$plot.pois.asc<-renderPlot({
@@ -1706,15 +1742,33 @@ server<-function(input, output, session) {
     }else{
       traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)  
     }
-    
     n.traps.a<-dim(traps.a)[1]
-    # check.vec.a<-seq(from=input$trap.start.a, to=(input$trap.start.a+input$trap.nights.a), by=input$n.check.a)
     checks<-ceiling(input$trap.nights.a/input$n.check.a)+1  #The number of checks - copes with check intervals that dont fit nealy into the duration
     cost<-trap.cost.func(a=checks, b=n.traps.a, c=input$traps.per.day.a, d=input$day.rate.a, e=input$cost.per.trap.a)
-    
     return(paste0(n.traps.a," Traps\nCost = $", cost ))
   })
   
+  output$text_bait_a_cost<-renderText({
+    shp<-mydata.shp()$shp   
+    if(input$bait_mask==1){
+      validate(
+        need(input$bait_asc != "", "NA"),
+      )
+      bait.mask<-mydata.bait()$ras.bait
+      bait.a<-make.trap.locs(input$bait.x.space.a, input$bait.y.space.a, 100, shp, ras=(bait.mask))
+    }else{
+      # traps.a<-make.trap.locs(input$traps.x.space.a, input$traps.y.space.a, 100, shp)  
+      bait.a<-make.trap.locs(input$bait.x.space.a, input$bait.y.space.a, 100, shp)
+    }
+    
+    n.bait.a<-dim(bait.a)[1]
+    # bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
+    checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
+    cost<-bait.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)
+    
+    return(paste0(n.bait.a," Ground baiting \nCost = $", cost ))
+  })
+
   output$text_trap_b_cost<-renderText({
     shp<-mydata.shp()$shp    
     traps.b<-make.trap.locs(input$traps.x.space.b, input$traps.y.space.b, 100, shp)
@@ -1722,22 +1776,9 @@ server<-function(input, output, session) {
     # check.vec.b<-seq(from=input$trap.start.b, to=(input$trap.start.b+input$trap.nights.b), by=input$n.check.b)
     checks<-ceiling(input$trap.nights.b/input$n.check.b)+1
     cost<-trap.cost.func(a=checks, b=n.traps.b, c=input$traps.per.day.b, d=input$day.rate.b, e=input$cost.per.trap.b)
-    
     return(paste0(n.traps.b," Traps\nCost = $", cost ))
   })
-  
-  
-  
-  output$text_bait_a_cost<-renderText({
-    shp<-mydata.shp()$shp    
-    bait.a<-make.trap.locs(input$bait.x.space.a, input$bait.y.space.a, 100, shp)
-    n.bait.a<-dim(bait.a)[1]
-    # bait.check.vec.a<-seq(from=input$bait.start.a, to=(input$bait.start.a+input$bait.nights.a), by=input$bait.check.a)
-    checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
-    cost<-bait.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)
-    
-    return(paste0(n.bait.a," Bait Stations\nCost = $", cost ))
-  })
+
   
   output$text_hunt_a_cost<-renderText({
     hunt.cost<-hunt.cost.func(a=input$hunt.days.a, b=input$day.rate.hunt.a)
@@ -1823,6 +1864,12 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                 .shiny-output-error-validation {
                                 color: blue;
                                 }
+    .shiny-notification {
+             position:fixed;
+             top: calc(50% - 150px);
+             left: calc(50% - 150px);
+             width: 10%;
+}
                                 "))),
               fluidRow(
                 column(width=6,  
@@ -1846,13 +1893,13 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ),
               
               
-              
+              fixedRow(),      
               
               
               fixedRow(
                 column(width=12,
                        tabsetPanel(id="inTabset",
-                                   tabPanel("1. Area and Pest Parameters",
+                                   tabPanel(strong("1. Area and Pest Parameters"),
                                             column(width=4,
                                                    h4("Area"),
                                                    wellPanel(
@@ -1956,7 +2003,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                    
                                             )
                                    ),
-                                   tabPanel("2. Control Methods",
+                                   tabPanel(strong("2. Control Methods"),
                                             h4("Chose one or more control methods to build a control scenario. Click Add Scenario to add it to the Run Scenarios tab."),
                                             h4("Repeat this for all control scenarios you want to run"),
                                             
@@ -2183,7 +2230,13 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                 div(style="display:inline-block;vertical-align:bottom",
                                                     verbatimTextOutput("text_bait_a_cost")),
                                                 
-                                                
+                                                br(),
+                                                div(style="display:inline-block;vertical-align:top",checkboxInput(inputId="bait_mask", label="Ground bait mask", value=FALSE)),
+                                                div(style="display:inline-block;vertical-align:top",conditionalPanel(
+                                                  condition="input.bait_mask==1",
+                                                  div(style="display:inline-block;vertical-align:top", fileInput(inputId = "bait_asc", label="Chose the ground bait mask", accept=c(".asc",".tif"), multiple=TRUE, width="200px")),
+                                                  div(style="display:inline-block;vertical-align:top", plotOutput(outputId = "plot.bait.asc", width = "450px", height="350px"))
+                                                )),
                                                 
                                                 tags$style(type="text/css", "#redtitle {color: black}")
                                                 # ),
@@ -2276,7 +2329,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             
                                    ),
                                    
-                                   tabPanel("3. Run Scenarios",
+                                   tabPanel(strong("3. Run Scenarios"),
                                             # tableOutput('scenarios.table'),
                                             h4("Use this tab to check scenarios, and delete them if needed (click on the rows to delete)"), 
                                             h4("When you are happy, click 'Run Simulations' to run the simulations."),
@@ -2313,11 +2366,9 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             
                                             DT::dataTableOutput("tableDT")
                                    ),
-                                   
-                                   
-                                   
+
                                    # ),
-                                   tabPanel("4. Results",
+                                   tabPanel("4. Results", 
                                             fluidRow(
                                               column(width=3,
                                                      # selectInput("result_scenario","Choose Scenario to plot",choices=NULL),
@@ -2346,9 +2397,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                             fluidRow(
                                               downloadButton("report", strong("Generate report"),icon=icon("file-export")) 
                                             )
-                                            
                                    ),
-                                   tabPanel("5. Help",
+                                   tabPanel(strong("5. Help"),
                                             fluidRow(
                                               column(width=6,
                                                      h3("Instructions"),
@@ -2426,7 +2476,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                                       strong("-Days hunted")," - the duration of the hunting period.", br(),
                                                                       strong("-Distance per day (km)")," - the liear distance per day covered by hunting in kilometers.", br(),
                                                                       strong("-Kill rate")," - this parameter is combined with distance per day to calculate the probability of an individual being hunted on a single day, given by:",br(),
-                                                                      "p.kill = 1 - exp(killrate x Effort)",br()," where Effort = distance (km) per km\U00B2 of the area ", br(),
+                                                                      "p.kill = 1 - exp(-killrate x Effort)",br()," where Effort = distance (km) per km\U00B2 of the area ", br(),
                                                                       "Click ",strong("Effort vs prob of kill"),"to see how changing the kill rate and distance changes the probability of kill.", br(),
                                                                       strong("-Hunting mask")," - You can upload a raster (.asc or .tif) that defines the area that is to be hunted. The raster must consist of grid cells where 1 corresponds to areas to be hunted and 0s otherwise.",br(),
                                                                       img(src="mask_eg.png", height = 250, align="center", hspace=20,vspace=10)
@@ -2454,7 +2504,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.9.2: May 2022"),
+              h6("v1.9.3: September 2022"),
               h6("For help, suggested changes, or reporting issues, contact Andrew Gormley:"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
@@ -2474,11 +2524,18 @@ shinyApp(ui=ui, server=server)
 #1.7.1 - scenarios are back! - with add and delete buttons.
 #1.8.1 - included aerial poisoning - and baiting and costs
 #1.9 - rasters of aerial and hunting masks can be read in. and tidy up results tab
+#1.9.3 - mask for trapping
 
 #Need to include bait costs...?
 #Group costs by labour and fixed costs...?
 
 
+#From Al Robley
+#1. Save sets of parameters...
+#2. Different bait densities... - yeah nah - would need a lot of data on bait interaction rates
+#3. Multiple baiting runs per year...
+#4. Download data behind graphs...
+#5. Need to tidy up the kill rate parameter stuff for hunting...
 
 
 
