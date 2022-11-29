@@ -213,7 +213,7 @@ server<-function(input, output, session) {
   
   iv <- InputValidator$new()
   iv$add_rule("scenname", sv_required())
-  iv$add_rule("numb.poss", sv_required())
+  iv$add_rule("numb.poss.1", sv_required())
   iv$enable()
   
   
@@ -591,7 +591,7 @@ server<-function(input, output, session) {
     traps<-make.trap.locs(traps.x.space, traps.y.space, buff, shp)
     
     #Temporary pest animal coordinates...
-    n.poss<-input$numb.poss#.i
+    n.poss<-input$numb.poss.1#.i
     if(is.na(n.poss)){
       n.poss<-0
     }
@@ -643,7 +643,7 @@ server<-function(input, output, session) {
       need(input$n.check.a != "", "Please enter a value for the Check interval"),
       need(input$p.bycatch.a != "", "Please enter a value for the Daily bycatch rate"),
       need(input$max.catch.a != "", "Please enter a value for the prob of Max catch"),
-      need(input$numb.poss != "", "Please enter a value for the number of animals ")
+      need(input$numb.poss.1 != "", "Please enter a value for the number of animals ")
     )
     
     #Read in all the parameter values for the scenarios
@@ -848,8 +848,9 @@ server<-function(input, output, session) {
         #Carrying capacity for the area in terms of total number of animals - should be grid based?
         K.tot<-K.poss*ha
         
-        n.poss<-input$numb.poss #- should this be a parameter...? Or better to leave - maybe leave cause can re-run with same params.
-        if(is.na(n.poss)){
+        n.poss.in.1<-input$numb.poss.1 #- should this be a parameter...? Or better to leave - maybe leave cause can re-run with same params.
+        n.poss.in.2<-input$numb.poss.2 #- should this be a parameter...? Or better to leave - maybe leave cause can re-run with same params.
+        if(is.na(n.poss.in.1)){
           n.poss<-0
         }
         max.catch.a<-input$max.catch.a
@@ -917,8 +918,9 @@ server<-function(input, output, session) {
         pois.catch.mat<-matrix(NA,nrow=n_its,ncol=n.nights)  #To keep track of poisoning
         # pop.size.zone.vec<-vector("list",n_its)
         
-        
+        n.poss.vec<-floor(runif(n_its, min=n.poss.in.1, max=n.poss.in.2))
         for(ii in 1:n_its){
+          n.poss<-n.poss.vec[ii]
           pop.size.mat[ii,1]<-n.poss
           
           #~~~~~~~~~Make some animals~~~~~~~~~~
@@ -1489,10 +1491,14 @@ server<-function(input, output, session) {
     hunt.catch.mat<-hunt.catch.list[[idx]]
     
     nights.vec<-1:input$n.nights
-    ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
-    ymax.b<-max(cumsum(colMeans(bait.catch.mat)))
-    ymax.p<-max(cumsum(colMeans(pois.catch.mat)))
-    ymax.h<-max(cumsum(colMeans(hunt.catch.mat)))
+    # ymax.t<-max(cumsum(colMeans(trap.catch.mat)))
+    ymax.t<-max(apply(trap.catch.mat,1,cumsum))
+    # ymax.b<-max(cumsum(colMeans(bait.catch.mat)))
+    ymax.b<-max(apply(bait.catch.mat,1,cumsum))
+    # ymax.p<-max(cumsum(colMeans(pois.catch.mat)))
+    ymax.p<-max(apply(pois.catch.mat,1,cumsum))
+    # ymax.h<-max(cumsum(colMeans(hunt.catch.mat)))
+    ymax.h<-max(apply(hunt.catch.mat,1,cumsum))
     ymax<-max(ymax.b, ymax.t, ymax.p, ymax.h)
     
     par(mar=c(4,4,3,2), tcl=-.2, mgp=c(2.5,1,0))
@@ -1809,10 +1815,10 @@ server<-function(input, output, session) {
   
   #The number of animals per hectare shown in Tab 1 under Pest Parameters  
   output$text_density<-renderText({
-    need(input$numb.poss != "", "Please enter a value for the number of animals ")
+    need(input$numb.poss.1 != "", "Please enter a value for the number of animals ")
     ha<-mydata.shp()$ha
     # numb<-200
-    numb<-input$numb.poss
+    numb<-input$numb.poss.1
     return(paste0(round(numb/ha,2)," per ha"))
   })
   
@@ -1927,7 +1933,8 @@ ui<-fluidPage(theme=shinytheme("flatly"),
                                                    h4("Pest parameters"),
                                                    wellPanel(
                                                      div(style="display:inline-block;vertical-align:top",title="Number of animals",
-                                                         numericInput(inputId = "numb.poss", label="Number (total)", value=100, width="180px")
+                                                         numericInput(inputId = "numb.poss.1", label="Number (total)", value=100, width="180px"),
+                                                         numericInput(inputId = "numb.poss.2", label="Number (max)", value=200, width="180px")
                                                      ),
                                                      div(style="display:inline-block;vertical-align:top",title="Pests distributed randomly or according to habitat (which requires reading in a raster of relative distribution)",
                                                          # fileInput(inputId = "ras.1", label="Ascii file of relative abundance", accept=c('.asc'), multiple=FALSE, width="250px")
@@ -2504,7 +2511,7 @@ ui<-fluidPage(theme=shinytheme("flatly"),
               ), #End of Row
               
               
-              h6("v1.9.3: September 2022"),
+              h6("v1.9.4: September 2022"),
               h6("For help, suggested changes, or reporting issues, contact Andrew Gormley:"),
               h6("email: gormleya@landcareresearch.co.nz")
               # h6("TrapSim was originally developed using funding from Centre for Invasive Species Solutions (CISS)"),
