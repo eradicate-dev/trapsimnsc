@@ -1,0 +1,10 @@
+Device,Cost,Max,Possum,Stoat,Ferret,Rat,Cat
+A24,200,24,NA,0.05,NA,0.07,NA
+AT220,495,100,0.1,NA,NA,0.1,NA
+DOC200,98,1,NA,0.05,NA,0.05,NA
+DOC250,153,1,NA,NA,0.05,NA,NA
+Sentinel,50,1,0.1,NA,NA,NA,0.1
+ReWild,195,1,NA,0.1,0.1,0.1,NA
+Timms,60,1,0.1,NA,NA,NA,0.05
+Trapinator,45,1,0.1,NA,NA,NA,NA
+VictorMod,14,1,NA,0.1,NA,0.1,NA
