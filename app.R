@@ -234,7 +234,7 @@ server<-function(input, output, session) {
     g.zero.a=NA    #This is the proportion that is untrappable, not g0....
     trap.mask=NA
     trap.max=NA
-    trap.cost=NA
+    trap.cost=0
     #~~~ Bait Stations ~~~
     bait.start.a = NA
     bait.nights.a = NA
@@ -244,6 +244,7 @@ server<-function(input, output, session) {
     bait.g.mean.a = NA
     bait.g.zero.a = NA
     bait.mask = NA
+    bait.cost = 0
     
     #Add the trap stuff
     if(input$trap_methods==1){    
@@ -279,6 +280,11 @@ server<-function(input, output, session) {
       if(input$bait_mask==1){ #Work out the trapped area and save the file path to the raster that will be used.
         bait.mask = mydata.bait()$myraster
       }
+      
+      checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
+      n.bait.a<-dim(make.trap.locs(bait.x.space.a, bait.y.space.a, 100, shp))[1]
+      bait.cost<-bait.cost.func(a=checks, b=n.bait.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)
+
     }
     
     #The letter codes used to help build up the 'Methods' part of the scenario names
@@ -313,6 +319,7 @@ server<-function(input, output, session) {
       bait.g.zero.a = bait.g.zero.a,
       bait.mask = bait.mask,
       trap.cost=trap.cost, 
+      bait.cost=bait.cost,
       methods = scen.code
     )
     newScenParam <- rbind(scenParam(),to_add) # adding new data
@@ -320,8 +327,8 @@ server<-function(input, output, session) {
     
     #Test for duplicates and blank scenarios
     t<-scenParam()
-    if(sum(duplicated(t[,2:20]))==1){
-      t<-t[!duplicated(t[,2:20]), ]        #Dont add duplicates
+    if(sum(duplicated(t[,2:21]))==1){
+      t<-t[!duplicated(t[,2:21]), ]        #Dont add duplicates
       showModal(modalDialog(
         title = "Error: Duplicate scenario!","This control scenario has already been added",easyClose = TRUE, fade=FALSE, size="s",
         footer =  modalButton("Cancel", icon=icon("exclamation"))
@@ -595,13 +602,13 @@ server<-function(input, output, session) {
         max.catch.a<-trap.max#input$max.catch.a
         #~~~~Calculate the costs~~~~
         trap.cost.sim<-params$trap.cost[kk]
-        bait.cost.sim<-0
+        bait.cost.sim<-params$bait.cost[kk]
 
-        if(is.na(bait.start.a)==FALSE){
-          checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
-          # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
-          bait.cost.sim<-bait.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)        
-        }
+        # if(is.na(bait.start.a)==FALSE){
+        #   checks<-ceiling(input$bait.nights.a/input$bait.check.a)+1
+        #   # bait.cost.sim<-trap.cost.func(a=bait.check.vec.a, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a)
+        #   bait.cost.sim<-bait.cost.func(a=checks, b=n.baits.a, c=input$bait.per.day.a, d=input$bait.day.rate.a, e=input$cost.per.bait.a, f=input$bait.cost.a)        
+        # }
         
 
         n_its<-input$n.its  #Number of iterations
@@ -872,7 +879,7 @@ server<-function(input, output, session) {
       } #End kk - end of scenario
     })  #End of progress
     #Re-order parameters for the table
-    params<-params[,c(1,21,25,24,22:23,2:19)]
+    params<-params[,c(1,22,26,25,23:24,2:19)]
     
     return(list(trap.catch.mat=trap.catch.mat, bait.catch.mat=bait.catch.mat, pop.size.mat=pop.size.mat, animals.xy=animals.xy, params=params, pop.size.list=pop.size.list, trap.catch.list=trap.catch.list, bait.catch.list=bait.catch.list))#, pop.zone.list=pop.zone.list))#, animals.done.xy=animals.xy))    
   }
@@ -1119,7 +1126,7 @@ server<-function(input, output, session) {
   
   #This contains the scenarios on Tab 3: Run Scenarios
   output$tableDT <- DT::renderDataTable(
-    scenParam()[c(1,21,2:11,20,12:19)]
+    scenParam()[c(1,22,2:11,20,12:19,21)]
   )
   
 
